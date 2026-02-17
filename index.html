@@ -3,28 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.6.5</title>
+    <title>Navigate Caseload File Generator v3.6.6</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
-// Category Manager: Apply Year/Term
-document.addEventListener('click', function(e){
-  if(e.target && e.target.id === 'cm-apply'){
-    const y = parseInt(document.getElementById('cm-year').value, 10);
-    const t = document.getElementById('cm-term').value;
-    if (!isNaN(y) && (t==='FA' || t==='SP')){
-      TERM_STATE.year = y;
-      TERM_STATE.termCode = t;
-      // trigger a re-render if function available
-      if (typeof window.renderDashboard === 'function') {
-        window.renderDashboard(); // full refresh
-      } else if (typeof window.refreshCategoryManager === 'function') {
-        window.refreshCategoryManager();
-      } else {
-        // Fallback: force a simple reflow by switching tabs if you have tab controls; otherwise noop.
-      }
-    }
-  }
-});
-
 </script>
     <style>
         body {
@@ -195,7 +175,7 @@ document.addEventListener('click', function(e){
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 30px;">Version 3.6.5 - Released February 17, 2026</div>
+        <div class="subtitle" style="margin-bottom: 30px;">Version 3.6.6 - Released February 17, 2026</div>
         
         <!-- Required File Section -->
         <div class="upload-section" style="border: 2px solid #007bff; background: linear-gradient(135deg, #f8f9ff 0%, #e7f3ff 100%);">
@@ -3658,13 +3638,41 @@ document.addEventListener('click', function(e){
     if (!isNaN(y) && (t==='FA' || t==='SP')){
       TERM_STATE.year = y;
       TERM_STATE.termCode = t;
-      // trigger a re-render if function available
-      if (typeof window.renderDashboard === 'function') {
-        window.renderDashboard(); // full refresh
-      } else if (typeof window.refreshCategoryManager === 'function') {
-        window.refreshCategoryManager();
-      } else {
-        // Fallback: force a simple reflow by switching tabs if you have tab controls; otherwise noop.
+      // Re-render the Category Manager tab with updated term
+      try {
+        if (appState && appState.processedData) {
+          // Preserve current checkbox selections
+          const savedSelections = Object.assign({}, selectedCategories);
+          const categoryAnalytics = calculateCategoryAnalytics(appState.processedData);
+          // Restore saved selections for categories that still exist
+          if (categoryAnalytics.featuredCategories) {
+            categoryAnalytics.featuredCategories.forEach(([cat, stats]) => {
+              if (savedSelections.hasOwnProperty(cat)) {
+                stats.selected = savedSelections[cat];
+              }
+            });
+          }
+          if (categoryAnalytics.otherCategories) {
+            categoryAnalytics.otherCategories.forEach(([cat, stats]) => {
+              if (savedSelections.hasOwnProperty(cat)) {
+                stats.selected = savedSelections[cat];
+              }
+            });
+          }
+          // Update the stored analytics
+          appState.analytics.category = categoryAnalytics;
+          // Re-render the category content tab
+          const categoryContent = document.getElementById('categoryContent');
+          if (categoryContent) {
+            categoryContent.innerHTML = generateCategoryManagerDashboard(categoryAnalytics);
+            // Re-initialize selectedCategories from the new analytics
+            selectedCategories = {};
+            categoryAnalytics.featuredCategories.forEach(([cat, stats]) => { selectedCategories[cat] = stats.selected; });
+            categoryAnalytics.otherCategories.forEach(([cat, stats]) => { selectedCategories[cat] = stats.selected; });
+          }
+        }
+      } catch(err) {
+        console.error('Error refreshing Category Manager:', err);
       }
     }
   }
