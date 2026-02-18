@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.6.6</title>
+    <title>Navigate Caseload File Generator v3.7.2</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -175,7 +175,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 30px;">Version 3.6.6 - Released February 17, 2026</div>
+        <div class="subtitle" style="margin-bottom: 30px;">Version 3.7.2 - Released February 18, 2026</div>
         
         <!-- Required File Section -->
         <div class="upload-section" style="border: 2px solid #007bff; background: linear-gradient(135deg, #f8f9ff 0%, #e7f3ff 100%);">
@@ -275,24 +275,41 @@
         const CONSTANTS = {
             
   ADVISOR_OFFICE_ALIASES: {
-    'ECI - College Now Advisor' : 'ECI - College Now',
-    'ECI - Energy Tech HS Advisor' : 'ECI - Energy Tech HS',
-    'ECI - International HS Advisor' : 'ECI - International HS',
-    'ECI - Middle College HS Advisor' : 'ECI - Middle College HS',
-    'CUNY Start Advisor' : 'CUNY Start',
-    'Math Start Advisor' : 'Math Start',
-    'CUNY 2X Tech Computer Science Advisor' : 'CUNY 2X Tech Academy'
+    'CUNY 2X Tech Computer Science Advisor' : 'CUNY 2X Tech Academy',
+    'Veteran Services Advisor' : 'Veterans Services',
+    'Veterans Services Advisor' : 'Veterans Services'
+  },
+  // Map from lowercase role to canonical office name
+  ROLE_TO_OFFICE: {
+    'asap advisor': 'ASAP',
+    'college discovery counselor': 'College Discovery',
+    'student advising services advisor': 'Student Advising Services',
+    'international student services advisor': 'International Student Services',
+    'careers in engineering advisor': 'Careers in Engineering',
+    'cuny 2x tech computer science advisor': 'CUNY 2X Tech Academy',
+    'veteran services advisor': 'Veterans Services',
+    'veterans services advisor': 'Veterans Services',
+    'eci - college now advisor': 'ECI - College Now',
+    'eci - energy tech hs advisor': 'ECI - Energy Tech HS',
+    'eci - international hs advisor': 'ECI - International HS',
+    'eci - middle college hs advisor': 'ECI - Middle College HS',
+    'cuny start advisor': 'CUNY Start',
+    'math start advisor': 'Math Start',
+    'paramedic advisor': 'Health Sciences/Paramedic'
   },
 ROLES: {
                 ADVISOR: ['asap advisor', 'college discovery counselor', 'student advising services advisor', 
                          'international student services advisor', 'careers in engineering advisor', 
-                         'cuny 2x tech computer science advisor', 'veteran services advisor',
-      'eci - college now advisor',
-      'eci - energy tech hs advisor',
-      'eci - international hs advisor',
-      'eci - middle college hs advisor',
-      'cuny start advisor',
-      'math start advisor',],
+                         'cuny 2x tech computer science advisor', 'veteran services advisor', 'veterans services advisor'],
+                SECONDARY_ADVISOR: [
+                    'eci - college now advisor',
+                    'eci - energy tech hs advisor',
+                    'eci - international hs advisor',
+                    'eci - middle college hs advisor',
+                    'cuny start advisor',
+                    'math start advisor',
+                    'paramedic advisor'
+                ],
                 FACULTY: ['faculty mentor'],
                 CLINICAL: ['clinical health faculty advisor', 'health sciences faculty advisor'],
                 PEER: ['peer advisor'],
@@ -305,6 +322,10 @@ ROLES: {
                 CATEGORY: 'Category',
                 PROFESSIONAL_ADVISOR: 'Professional Advisor',
                 ADVISING_OFFICE: 'Advising Office',
+                SECONDARY_PROFESSIONAL_ADVISOR: 'Secondary Professional Advisor',
+                SECONDARY_ADVISING_OFFICE: 'Secondary Advising Office',
+                SECONDARY_STAFF_ID: 'Secondary Staff ID',
+                OTHER_ADVISING: 'Other Advising',
                 FACULTY_MENTOR: 'Faculty Mentor',
                 PEER_ADVISOR: 'Peer Advisor',
                 PROGRAM_DIRECTOR: 'Program Director',
@@ -459,13 +480,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
             html += '<div style="font-size:12px; color:#6c757d; margin-bottom:10px;">This table shows the median number of students per advisor in each advising office. <strong>Use the checkboxes in the Advisor Assignments table to include/exclude advisors from these calculations.</strong></div>';
             
             const officeStats = {};
-            const otherOffices = new Set([
-                'ECI - College Now',
-                'ECI - Energy Tech HS',
-                'ECI - International HS',
-                'ECI - Middle College HS',
-                'Health Sciences/Paramedic'
-            ]);
+            const otherOffices = new Set([]);
             
             // Build office stats with dynamic student counts based on selected advisors
             Object.entries(officeDetailedStats).forEach(([office, stats]) => {
@@ -625,7 +640,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
             // Other offices table
             if (otherOfficesList.length > 0) {
                 html += '<h4 style="color:#333; margin: 24px 0 10px;">📊 Median Caseload by Advising Office (other)</h4>';
-                html += '<div style="font-size:12px; color:#6c757d; margin-bottom:10px;">ECI offices and specialized programs.</div>';
+                html += '<div style="font-size:12px; color:#6c757d; margin-bottom:10px;">Specialized programs.</div>';
                 
                 const otherHeaders = [
                     { title: 'Advising Office', align: 'left' },
@@ -750,6 +765,8 @@ function toAdvisingOfficeFromRole(roleLabel) {
 
             extractProfessionalAdvisorAndOffice(staffList) {
                 const entries = staffList.split(';').map(s => s.trim());
+                
+                // Primary advisors
                 const matching = entries.filter(entry => 
                     CONSTANTS.ROLES.ADVISOR.some(role => entry.toLowerCase().includes(`(${role})`))
                 );
@@ -758,29 +775,37 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 let offices = matching.map(entry => {
                     const match = entry.match(/\((.*?)\)/);
                     if (!match) return '';
-                    let office = match[1];
-                    office = office.replace(/ (advisor|counselor)$/i, '');
-                    return office;
+                    const roleLower = match[1].toLowerCase();
+                    return CONSTANTS.ROLE_TO_OFFICE[roleLower] || match[1].replace(/ (advisor|counselor)$/i, '');
                 });
 
+                // Secondary advisors
+                const secondaryMatching = entries.filter(entry => 
+                    CONSTANTS.ROLES.SECONDARY_ADVISOR.some(role => entry.toLowerCase().includes(`(${role})`))
+                );
                 
-                // --- JG tweak: handle specific Paramedic Advisor case ---
+                let secondaryAdvisors = secondaryMatching.map(entry => entry.split('(')[0].trim());
+                let secondaryOffices = secondaryMatching.map(entry => {
+                    const match = entry.match(/\((.*?)\)/);
+                    if (!match) return '';
+                    const roleLower = match[1].toLowerCase();
+                    return CONSTANTS.ROLE_TO_OFFICE[roleLower] || match[1].replace(/ (advisor|counselor)$/i, '');
+                });
+                
+                // Ensure uniqueness
                 try {
-                    if (Array.isArray(entries) && entries.includes('Freire, Jazmine (Paramedic Advisor)')) {
-                        // Add Professional Advisor name as "Freire, Jazmine" (Last, First)
-                        if (Array.isArray(advisors)) advisors.push('Freire, Jazmine');
-                        // Add Advising Office label exactly as requested
-                        if (Array.isArray(offices)) offices.push('Health Sciences/Paramedic');
-                    }
-                    // Ensure uniqueness
                     if (Array.isArray(advisors)) advisors = Array.from(new Set(advisors));
                     if (Array.isArray(offices)) offices = Array.from(new Set(offices));
+                    if (Array.isArray(secondaryAdvisors)) secondaryAdvisors = Array.from(new Set(secondaryAdvisors));
+                    if (Array.isArray(secondaryOffices)) secondaryOffices = Array.from(new Set(secondaryOffices));
                 } catch (e) {
-                    console.warn('Paramedic Advisor special-case handling failed:', e);
+                    console.warn('Advisor dedup failed:', e);
                 }
         return {
                     professionalAdvisor: advisors.join('; ') || null,
-                    advisingOffice: offices.join('; ') || null
+                    advisingOffice: offices.join('; ') || null,
+                    secondaryProfessionalAdvisor: secondaryAdvisors.join('; ') || null,
+                    secondaryAdvisingOffice: secondaryOffices.join('; ') || null
                 };
             },
 
@@ -1097,8 +1122,12 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         const advisorInfo = utils.extractProfessionalAdvisorAndOffice(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '');
                         record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR] = advisorInfo.professionalAdvisor;
                         
-                        // Start with the office extracted from Assigned Staff
-                        let advisingOffices = advisorInfo.advisingOffice ? advisorInfo.advisingOffice.split(';').map(o => o.trim()) : [];
+                        // Primary advising office - just from Assigned Staff roles (no special values)
+                        record[CONSTANTS.COLUMNS.ADVISING_OFFICE] = advisorInfo.advisingOffice;
+                        
+                        // Secondary advising columns
+                        record[CONSTANTS.COLUMNS.SECONDARY_PROFESSIONAL_ADVISOR] = advisorInfo.secondaryProfessionalAdvisor;
+                        record[CONSTANTS.COLUMNS.SECONDARY_ADVISING_OFFICE] = advisorInfo.secondaryAdvisingOffice;
                         
                         // Check Degree column for "NA" -> add "Nondegree"
                         const degree = record['Degree'] || '';
@@ -1107,7 +1136,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         // Check Category for clinical course enrollment
                         const category = record[CONSTANTS.COLUMNS.CATEGORY] || '';
                         
-                        // Determine if we need to add special office values
+                        // Determine Other Advising designations
                         let addNondegree = false;
                         let addPermit = false;
                         let addClinical = false;
@@ -1129,21 +1158,12 @@ function toAdvisingOfficeFromRole(roleLabel) {
                             addClinical = true;
                         }
                         
-                        // Add special values at the beginning (avoiding duplicates)
-                        const specialOffices = [];
-                        if (addClinical && !advisingOffices.includes('Enrolled in Clinical')) {
-                            specialOffices.push('Enrolled in Clinical');
-                        }
-                        if (addNondegree && !advisingOffices.includes('Nondegree')) {
-                            specialOffices.push('Nondegree');
-                        }
-                        if (addPermit && !advisingOffices.includes('Permit')) {
-                            specialOffices.push('Permit');
-                        }
-                        
-                        // Combine special offices at the beginning with existing offices
-                        const allOffices = [...specialOffices, ...advisingOffices];
-                        record[CONSTANTS.COLUMNS.ADVISING_OFFICE] = allOffices.length > 0 ? allOffices.join('; ') : null;
+                        // Build Other Advising column
+                        const otherAdvising = [];
+                        if (addClinical) otherAdvising.push('Enrolled in Clinical');
+                        if (addNondegree) otherAdvising.push('Nondegree');
+                        if (addPermit) otherAdvising.push('Permit');
+                        record[CONSTANTS.COLUMNS.OTHER_ADVISING] = otherAdvising.length > 0 ? otherAdvising.join('; ') : null;
                         
                         const facultyMentor = utils.extractStaffByRole(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '', 'faculty mentor');
                         const clinicalAdvisor = utils.extractStaffByRole(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '', 'clinical health faculty advisor');
@@ -1254,10 +1274,19 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 Object.entries(lookupMaps).forEach(([type, map]) => {
                     const config = CONSTANTS.LOOKUP_CONFIGS[type];
                     
-                    if (type === 'advisor' && record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR]) {
-                        const names = record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR].split(';').map(n => n.trim()).filter(Boolean);
-                        const ids = names.map(name => map[name]?.id).filter(Boolean);
-                        record[config.outputColumn] = ids.length > 0 ? ids.join('; ') : null;
+                    if (type === 'advisor') {
+                        if (record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR]) {
+                            const names = record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR].split(';').map(n => n.trim()).filter(Boolean);
+                            const ids = names.map(name => map[name]?.id).filter(Boolean);
+                            record[config.outputColumn] = ids.length > 0 ? ids.join('; ') : null;
+                        }
+                        
+                        // Lookup Secondary Staff ID independently
+                        if (record[CONSTANTS.COLUMNS.SECONDARY_PROFESSIONAL_ADVISOR]) {
+                            const secNames = record[CONSTANTS.COLUMNS.SECONDARY_PROFESSIONAL_ADVISOR].split(';').map(n => n.trim()).filter(Boolean);
+                            const secIds = secNames.map(name => map[name]?.id).filter(Boolean);
+                            record[CONSTANTS.COLUMNS.SECONDARY_STAFF_ID] = secIds.length > 0 ? secIds.join('; ') : null;
+                        }
                     }
                     
                     else if (type === 'faculty' && record[CONSTANTS.COLUMNS.FACULTY_MENTOR]) {
@@ -1467,39 +1496,19 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 staffEntries.forEach(entry => {
                     const entryLower = entry.toLowerCase();
                     
-                    // Check each advisor role and assign to appropriate office
-                    Object.entries(CONSTANTS.ROLES).forEach(([roleType, roles]) => {
-                        if (roleType === 'ADVISOR') {
-                            roles.forEach(role => {
-                                if (entryLower.includes(`(${role})`)) {
-                                    // Extract advisor name
-                                    const name = entry.split('(')[0].trim();
-                                    const normalizedName = normalizeAdvisorName(name);
-                                    
-                                    // Determine the office based on the role
-                                    let office = '';
-                                    if (role === 'asap advisor') office = 'ASAP';
-                                    else if (role === 'college discovery counselor') office = 'College Discovery';
-                                    else if (role === 'student advising services advisor') office = 'Student Advising Services';
-                                    else if (role === 'international student services advisor') office = 'International Student Services';
-                                    else if (role === 'careers in engineering advisor') office = 'Careers in Engineering';
-                                    else if (role === 'cuny 2x tech academy advisor') office = 'CUNY 2X Tech Academy';
-                                    else if (role === 'veteran services advisor') office = 'Veteran Services';
-                                    else if (role === 'eci - college now advisor') office = 'ECI - College Now';
-                                    else if (role === 'eci - energy tech hs advisor') office = 'ECI - Energy Tech HS';
-                                    else if (role === 'eci - international hs advisor') office = 'ECI - International HS';
-                                    else if (role === 'eci - middle college hs advisor') office = 'ECI - Middle College HS';
-                                    else if (role === 'cuny start advisor') office = 'CUNY Start';
-                                    else if (role === 'math start advisor') office = 'Math Start';
-                                    
-                                    if (office) {
-                                        if (!advisorsByOffice[office]) {
-                                            advisorsByOffice[office] = [];
-                                        }
-                                        advisorsByOffice[office].push(normalizedName);
-                                    }
+                    // Check each primary advisor role and assign to appropriate office
+                    CONSTANTS.ROLES.ADVISOR.forEach(role => {
+                        if (entryLower.includes(`(${role})`)) {
+                            const name = entry.split('(')[0].trim();
+                            const normalizedName = normalizeAdvisorName(name);
+                            const office = CONSTANTS.ROLE_TO_OFFICE[role] || '';
+                            
+                            if (office) {
+                                if (!advisorsByOffice[office]) {
+                                    advisorsByOffice[office] = [];
                                 }
-                            });
+                                advisorsByOffice[office].push(normalizedName);
+                            }
                         }
                     });
                 });
@@ -1598,7 +1607,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 staffEntries.forEach(entry => {
                     const entryLower = entry.toLowerCase();
                     
-                    // Check if this is an advisor role
+                    // Check if this is a primary advisor role
                     CONSTANTS.ROLES.ADVISOR.forEach(role => {
                         if (entryLower.includes(`(${role})`)) {
                             // Extract advisor name
@@ -1606,20 +1615,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                             const normalizedName = name.trim().replace(/\s+/g, ' ');
                             
                             // Determine the office based on the role
-                            let office = '';
-                            if (role === 'asap advisor') office = 'ASAP';
-                            else if (role === 'college discovery counselor') office = 'College Discovery';
-                            else if (role === 'student advising services advisor') office = 'Student Advising Services';
-                            else if (role === 'international student services advisor') office = 'International Student Services';
-                            else if (role === 'careers in engineering advisor') office = 'Careers in Engineering';
-                            else if (role === 'cuny 2x tech academy advisor') office = 'CUNY 2X Tech Academy';
-                            else if (role === 'veteran services advisor') office = 'Veteran Services';
-                            else if (role === 'eci - college now advisor') office = 'ECI - College Now';
-                            else if (role === 'eci - energy tech hs advisor') office = 'ECI - Energy Tech HS';
-                            else if (role === 'eci - international hs advisor') office = 'ECI - International HS';
-                            else if (role === 'eci - middle college hs advisor') office = 'ECI - Middle College HS';
-                            else if (role === 'cuny start advisor') office = 'CUNY Start';
-                            else if (role === 'math start advisor') office = 'Math Start';
+                            const office = CONSTANTS.ROLE_TO_OFFICE[role] || '';
                             
                             if (office) {
                                 studentOffices.add(office);
@@ -1664,22 +1660,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     const entryLower = entry.toLowerCase();
                     CONSTANTS.ROLES.ADVISOR.forEach(role => {
                         if (entryLower.includes(`(${role})`)) {
-                            // Determine office from role
-                            let office = '';
-                            if (role === 'asap advisor') office = 'ASAP';
-                            else if (role === 'college discovery counselor') office = 'College Discovery';
-                            else if (role === 'student advising services advisor') office = 'Student Advising Services';
-                            else if (role === 'international student services advisor') office = 'International Student Services';
-                            else if (role === 'careers in engineering advisor') office = 'Careers in Engineering';
-                            else if (role === 'cuny 2x tech academy advisor') office = 'CUNY 2X Tech Academy';
-                            else if (role === 'veteran services advisor') office = 'Veteran Services';
-                            else if (role === 'eci - college now advisor') office = 'ECI - College Now';
-                            else if (role === 'eci - energy tech hs advisor') office = 'ECI - Energy Tech HS';
-                            else if (role === 'eci - international hs advisor') office = 'ECI - International HS';
-                            else if (role === 'eci - middle college hs advisor') office = 'ECI - Middle College HS';
-                            else if (role === 'cuny start advisor') office = 'CUNY Start';
-                            else if (role === 'math start advisor') office = 'Math Start';
-                            
+                            const office = CONSTANTS.ROLE_TO_OFFICE[role] || '';
                             if (office) studentOffices.add(office);
                         }
                     });
@@ -1708,19 +1689,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         let office = '';
                         if (m) {
                             const role = m[1].toLowerCase();
-                            if (role === 'asap advisor') office = 'ASAP';
-                            else if (role === 'college discovery counselor') office = 'College Discovery';
-                            else if (role === 'student advising services advisor') office = 'Student Advising Services';
-                            else if (role === 'international student services advisor') office = 'International Student Services';
-                            else if (role === 'careers in engineering advisor') office = 'Careers in Engineering';
-                            else if (role === 'cuny 2x tech academy advisor') office = 'CUNY 2X Tech Academy';
-                            else if (role === 'veteran services advisor') office = 'Veteran Services';
-                            else if (role === 'eci - college now advisor') office = 'ECI - College Now';
-                            else if (role === 'eci - energy tech hs advisor') office = 'ECI - Energy Tech HS';
-                            else if (role === 'eci - international hs advisor') office = 'ECI - International HS';
-                            else if (role === 'eci - middle college hs advisor') office = 'ECI - Middle College HS';
-                            else if (role === 'cuny start advisor') office = 'CUNY Start';
-                            else if (role === 'math start advisor') office = 'Math Start';
+                            office = CONSTANTS.ROLE_TO_OFFICE[role] || '';
                         }
                         
                         if (!advisorStudentSummary[name]) {
@@ -3745,6 +3714,10 @@ function exportProcessedData() {
         pushIfPresent(desiredOrder, {const:'ADVISING_OFFICE'});            // Advising Office
         pushIfPresent(desiredOrder, {const:'PROFESSIONAL_ADVISOR'});       // Professional Advisor
         pushIfPresent(desiredOrder, 'Staff ID');                           // Staff ID (advisor file)
+        pushIfPresent(desiredOrder, {const:'SECONDARY_ADVISING_OFFICE'});  // Secondary Advising Office
+        pushIfPresent(desiredOrder, {const:'SECONDARY_PROFESSIONAL_ADVISOR'}); // Secondary Professional Advisor
+        pushIfPresent(desiredOrder, {const:'SECONDARY_STAFF_ID'});         // Secondary Staff ID
+        pushIfPresent(desiredOrder, {const:'OTHER_ADVISING'});             // Other Advising
         pushIfPresent(desiredOrder, 'Degree');                             // Degree
         pushIfPresent(desiredOrder, {const:'NAV_M'});                      // Navigate Major
         pushIfPresent(desiredOrder, {const:'Major'});                      // Major
