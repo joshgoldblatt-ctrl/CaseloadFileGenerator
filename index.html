@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.7.2</title>
+    <title>Navigate Caseload File Generator v3.7.3</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -175,7 +175,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 30px;">Version 3.7.2 - Released February 18, 2026</div>
+        <div class="subtitle" style="margin-bottom: 30px;">Version 3.7.3 - Released February 18, 2026</div>
         
         <!-- Required File Section -->
         <div class="upload-section" style="border: 2px solid #007bff; background: linear-gradient(135deg, #f8f9ff 0%, #e7f3ff 100%);">
@@ -792,12 +792,35 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     return CONSTANTS.ROLE_TO_OFFICE[roleLower] || match[1].replace(/ (advisor|counselor)$/i, '');
                 });
                 
-                // Ensure uniqueness
+                // Dedup advisor+office pairs together to maintain positional alignment
                 try {
-                    if (Array.isArray(advisors)) advisors = Array.from(new Set(advisors));
-                    if (Array.isArray(offices)) offices = Array.from(new Set(offices));
-                    if (Array.isArray(secondaryAdvisors)) secondaryAdvisors = Array.from(new Set(secondaryAdvisors));
-                    if (Array.isArray(secondaryOffices)) secondaryOffices = Array.from(new Set(secondaryOffices));
+                    const seenPrimary = new Set();
+                    const dedupedAdvisors = [];
+                    const dedupedOffices = [];
+                    for (let i = 0; i < advisors.length; i++) {
+                        const key = `${advisors[i]}|||${offices[i]}`;
+                        if (!seenPrimary.has(key)) {
+                            seenPrimary.add(key);
+                            dedupedAdvisors.push(advisors[i]);
+                            dedupedOffices.push(offices[i]);
+                        }
+                    }
+                    advisors = dedupedAdvisors;
+                    offices = dedupedOffices;
+
+                    const seenSecondary = new Set();
+                    const dedupedSecAdvisors = [];
+                    const dedupedSecOffices = [];
+                    for (let i = 0; i < secondaryAdvisors.length; i++) {
+                        const key = `${secondaryAdvisors[i]}|||${secondaryOffices[i]}`;
+                        if (!seenSecondary.has(key)) {
+                            seenSecondary.add(key);
+                            dedupedSecAdvisors.push(secondaryAdvisors[i]);
+                            dedupedSecOffices.push(secondaryOffices[i]);
+                        }
+                    }
+                    secondaryAdvisors = dedupedSecAdvisors;
+                    secondaryOffices = dedupedSecOffices;
                 } catch (e) {
                     console.warn('Advisor dedup failed:', e);
                 }
