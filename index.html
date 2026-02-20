@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.7.3</title>
+    <title>Navigate Caseload File Generator v3.8.1</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -175,7 +175,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 30px;">Version 3.7.3 - Released February 18, 2026</div>
+        <div class="subtitle" style="margin-bottom: 30px;">Version 3.8.1 - Released February 20, 2026</div>
         
         <!-- Required File Section -->
         <div class="upload-section" style="border: 2px solid #007bff; background: linear-gradient(135deg, #f8f9ff 0%, #e7f3ff 100%);">
@@ -250,6 +250,20 @@
                 </div>
                 <input type="file" id="peerFile" accept=".csv">
                 <div class="file-item" id="peerFileStatus" style="margin-top: 10px; padding: 5px 10px; border-radius: 4px; font-size: 14px;"></div>
+            </div>
+            
+            <div class="file-input-wrapper">
+                <label for="irFile">
+                    <span style="font-size: 18px; vertical-align: middle;">📋</span> IR Student List File
+                </label>
+                <div class="help-text">
+                    <strong>Required columns:</strong><br>
+                    • <code>Student ID</code> - Must match Student ID in main file<br>
+                    • <code>Student Type</code> - Values: New, Transfer, Continuing, or Readmit<br>
+                    <strong>Format:</strong> Student IDs must exactly match those in the main caseload file
+                </div>
+                <input type="file" id="irFile" accept=".csv">
+                <div class="file-item" id="irFileStatus" style="margin-top: 10px; padding: 5px 10px; border-radius: 4px; font-size: 14px;"></div>
             </div>
         </div>
         
@@ -334,7 +348,8 @@ ROLES: {
                 Major: 'Major',
                 NAV_M: 'Navigate Major',
                 STUDENT_DEPT: 'Student Academic Department',
-                STUDENT_DEPT_SUB: 'Student Academic Department_sub'
+                STUDENT_DEPT_SUB: 'Student Academic Department_sub',
+                STUDENT_TYPE: 'Student Type'
             },
             LOOKUP_CONFIGS: {
                 advisor: {
@@ -1213,6 +1228,40 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     utils.updateProgress(60, 'Performing data lookups...', 'Matching staff IDs and department information');
                     
                     records = performLookups(records);
+                    
+                    // Process IR Student List if uploaded
+                    if (appState.data.ir) {
+                        utils.updateProgress(65, 'Processing IR Student List...', 'Matching student types');
+                        const irData = appState.data.ir;
+                        if (irData && irData.length >= 2) {
+                            const irHeaders = irData[0].map(h => h.trim());
+                            const idIdx = irHeaders.findIndex(h => h.toLowerCase() === 'student id');
+                            const typeIdx = irHeaders.findIndex(h => h.toLowerCase() === 'student type');
+                            
+                            if (idIdx !== -1 && typeIdx !== -1) {
+                                // Build lookup map from IR file
+                                const irMap = {};
+                                for (let i = 1; i < irData.length; i++) {
+                                    const row = irData[i];
+                                    const sid = row[idIdx]?.toString().trim();
+                                    const stype = row[typeIdx]?.toString().trim();
+                                    if (sid) irMap[sid] = stype || 'Not Found';
+                                }
+                                
+                                // Match to records
+                                records.forEach(record => {
+                                    const sid = record[CONSTANTS.COLUMNS.STUDENT_ID]?.toString().trim();
+                                    record[CONSTANTS.COLUMNS.STUDENT_TYPE] = sid && irMap[sid] ? irMap[sid] : 'Not Found';
+                                });
+                            } else {
+                                console.warn('IR Student List missing required columns (Student ID, Student Type)');
+                                records.forEach(record => {
+                                    record[CONSTANTS.COLUMNS.STUDENT_TYPE] = 'Not Found';
+                                });
+                            }
+                        }
+                    }
+                    
                     appState.processedData = records;
                     
                     utils.updateProgress(80, 'Calculating analytics...', 'Generating dashboard statistics and insights');
@@ -1368,6 +1417,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 earlyCollege: 0,
                 internationalStudent: 0,
                 asapAccepts: 0,
+                clinicalCourse: 0,
                 other: 0,
                 otherCreditsBreakdown: {
                     null: 0,
@@ -1394,10 +1444,15 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 const studentDept = record[CONSTANTS.COLUMNS.STUDENT_DEPT] || '';
                 
                 if (office?.trim()) {
-                    officeCounts[office] = (officeCounts[office] || 0) + 1;
+                    // Determine unique offices (e.g., "ASAP; ASAP" is still one unique office)
+                    const officeList = office.split(';').map(o => o.trim()).filter(Boolean);
+                    const uniqueOffices = [...new Set(officeList)];
+                    const officeKey = uniqueOffices.sort().join('; ');
                     
-                    // Check if this is a single office assignment
-                    if (!office.includes(';')) {
+                    officeCounts[officeKey] = (officeCounts[officeKey] || 0) + 1;
+                    
+                    // Check if this is a single office assignment (based on unique offices)
+                    if (uniqueOffices.length === 1) {
                         // Count the number of advisors for this single office
                         const advisorList = advisor ? advisor.split(';').map(a => a.trim()).filter(a => a) : [];
                         if (advisorList.length === 1) {
@@ -1408,10 +1463,10 @@ function toAdvisingOfficeFromRole(roleLabel) {
                             if (studentId) singleOfficeBreakdown.studentDetails[studentId] = 'multipleAdvisors';
                             
                             // Track which office this is for
-                            if (!singleOfficeBreakdown.multipleAdvisorsByOffice[office]) {
-                                singleOfficeBreakdown.multipleAdvisorsByOffice[office] = 0;
+                            if (!singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey]) {
+                                singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey] = 0;
                             }
-                            singleOfficeBreakdown.multipleAdvisorsByOffice[office]++;
+                            singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey]++;
                         }
                     }
                 } else {
@@ -1438,6 +1493,8 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         noOfficeBreakdown.internationalStudent++;
                     } else if (category.includes('SG:ASP3-Accepts ASAP Invitation')) {
                         noOfficeBreakdown.asapAccepts++;
+                    } else if (category.toLowerCase().includes('enrolled in any clinical course')) {
+                        noOfficeBreakdown.clinicalCourse++;
                     } else {
                         noOfficeBreakdown.other++;
                         
@@ -1774,6 +1831,10 @@ analytics.advising = {
             }
 
             analytics.category = calculateCategoryAnalytics(data);
+
+            if (appState.data.ir) {
+                analytics.studentType = calculateStudentTypeAnalytics(data);
+            }
 
             return analytics;
         }
@@ -2209,6 +2270,45 @@ const featuredExact = buildFeaturedExact(TERM_STATE.year, TERM_STATE.termCode);
             };
         }
 
+        function calculateStudentTypeAnalytics(data) {
+            const NON_DEGREE_VALUES = ['NA', 'Certificate <  30 Credits'];
+            
+            const degreeStudents = { 'New': 0, 'Transfer': 0, 'Continuing': 0, 'Readmit': 0, 'Not Found': 0 };
+            const nonDegreeStudents = { 'New': 0, 'Transfer': 0, 'Continuing': 0, 'Readmit': 0, 'Not Found': 0 };
+            let totalDegree = 0;
+            let totalNonDegree = 0;
+            
+            data.forEach(record => {
+                const degree = (record['Degree'] || '').trim();
+                const studentType = record[CONSTANTS.COLUMNS.STUDENT_TYPE] || 'Not Found';
+                const isNonDegree = NON_DEGREE_VALUES.includes(degree);
+                
+                if (isNonDegree) {
+                    totalNonDegree++;
+                    if (nonDegreeStudents.hasOwnProperty(studentType)) {
+                        nonDegreeStudents[studentType]++;
+                    } else {
+                        nonDegreeStudents[studentType] = 1;
+                    }
+                } else {
+                    totalDegree++;
+                    if (degreeStudents.hasOwnProperty(studentType)) {
+                        degreeStudents[studentType]++;
+                    } else {
+                        degreeStudents[studentType] = 1;
+                    }
+                }
+            });
+            
+            return {
+                degreeStudents,
+                nonDegreeStudents,
+                totalDegree,
+                totalNonDegree,
+                totalStudents: data.length
+            };
+        }
+
         // DASHBOARD GENERATION
         function showDashboard() {
             try {
@@ -2222,6 +2322,7 @@ const featuredExact = buildFeaturedExact(TERM_STATE.year, TERM_STATE.termCode);
                             <button id="academicTab" class="tab-button" onclick="showTab('academic')" style="padding: 10px 20px; margin-right: 10px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Academic Departments</button>
                             ${appState.data.faculty ? '<button id="facultyTab" class="tab-button" onclick="showTab(\'faculty\')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Faculty Mentors</button>' : ''}
                             ${appState.data.peer ? '<button id="peerTab" class="tab-button" onclick="showTab(\'peer\')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Peer Advisors</button>' : ''}
+                            ${appState.data.ir ? '<button id="studentTypeTab" class="tab-button" onclick="showTab(\'studentType\')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Student Type</button>' : ''}
                             <button id="categoryTab" class="tab-button" onclick="showTab('category')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Category Manager</button>
                         </div>
                         
@@ -2239,6 +2340,10 @@ const featuredExact = buildFeaturedExact(TERM_STATE.year, TERM_STATE.termCode);
                         
                         ${appState.data.peer ? `<div id="peerContent" class="tab-content" style="display: none;">
                             ${generatePeerDashboard(analytics.peer, data.length)}
+                        </div>` : ''}
+                        
+                        ${appState.data.ir ? `<div id="studentTypeContent" class="tab-content" style="display: none;">
+                            ${generateStudentTypeDashboard(analytics.studentType)}
                         </div>` : ''}
                         
                         <div id="categoryContent" class="tab-content" style="display: none;">
@@ -2527,6 +2632,7 @@ function generateAdvisingDashboard(analytics, totalRecords) {
         addBreakdownRow('Early College Initiative Students (SG:ECI)', noOfficeBreakdown.earlyCollege);
         addBreakdownRow('International Students (SG:ISS)', noOfficeBreakdown.internationalStudent);
         addBreakdownRow('ASAP Accepts Students (SG:ASP3)', noOfficeBreakdown.asapAccepts);
+        addBreakdownRow('Enrolled in any Clinical Course', noOfficeBreakdown.clinicalCourse);
 
         if (noOfficeBreakdown.other > 0) {
             const percentage = ((noOfficeBreakdown.other / noOfficeCount) * 100).toFixed(1);
@@ -3197,6 +3303,83 @@ function generatePeerDashboard(analytics, totalRecords) {
 }
 
 
+        function generateStudentTypeDashboard(analytics) {
+            if (!analytics) return '<p>No student type data available.</p>';
+            
+            const { degreeStudents, nonDegreeStudents, totalDegree, totalNonDegree, totalStudents } = analytics;
+            
+            let html = '<h4 style="color: #333; margin-bottom: 15px;">📋 Student Type Dashboard</h4>';
+            
+            // Summary cards
+            html += `
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+              <div style="flex:1 1 220px; background:#e7f3ff; border:1px solid #b8daf5; border-radius:8px; padding:14px;">
+                <div style="font-size:12px; color:#0b4f8a; font-weight:600;">Total Students</div>
+                <div style="font-size:24px; font-weight:800; color:#0b4f8a;">${totalStudents}</div>
+              </div>
+              <div style="flex:1 1 220px; background:#eafaf1; border:1px solid #bfe8d0; border-radius:8px; padding:14px;">
+                <div style="font-size:12px; color:#0f6b3a; font-weight:600;">Degree Students</div>
+                <div style="font-size:24px; font-weight:800; color:#0f6b3a;">${totalDegree}</div>
+                <div style="font-size:12px; color:#0f6b3a;">${((totalDegree/totalStudents)*100).toFixed(1)}%</div>
+              </div>
+              <div style="flex:1 1 220px; background:#fff7e6; border:1px solid #ffe0a6; border-radius:8px; padding:14px;">
+                <div style="font-size:12px; color:#8a5b0b; font-weight:600;">Non-degree Students</div>
+                <div style="font-size:24px; font-weight:800; color:#8a5b0b;">${totalNonDegree}</div>
+                <div style="font-size:12px; color:#8a5b0b;">${((totalNonDegree/totalStudents)*100).toFixed(1)}%</div>
+              </div>
+            </div>`;
+            
+            // Helper to build a student type table
+            function buildTypeTable(title, icon, data, total, colorScheme) {
+                let thtml = `<h5 style="color: ${colorScheme.heading}; margin: 20px 0 10px; padding: 10px; background-color: ${colorScheme.bg}; border-left: 4px solid ${colorScheme.heading};">${icon} ${title}</h5>`;
+                thtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">';
+                thtml += '<thead><tr style="background-color: #f8f9fa;">';
+                thtml += '<th style="border: 1px solid #dee2e6; padding: 10px; text-align: left;">Student Type</th>';
+                thtml += '<th style="border: 1px solid #dee2e6; padding: 10px; text-align: right;">Count</th>';
+                thtml += '<th style="border: 1px solid #dee2e6; padding: 10px; text-align: right;">% of Group</th>';
+                thtml += '</tr></thead><tbody>';
+                
+                // Sort entries: known types first in order, then Not Found, then any others
+                const typeOrder = ['New', 'Transfer', 'Continuing', 'Readmit', 'Not Found'];
+                const sortedEntries = Object.entries(data).sort(([a], [b]) => {
+                    const aIdx = typeOrder.indexOf(a);
+                    const bIdx = typeOrder.indexOf(b);
+                    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+                    if (aIdx !== -1) return -1;
+                    if (bIdx !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+                
+                sortedEntries.forEach(([type, count], index) => {
+                    const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+                    const isNotFound = type === 'Not Found';
+                    const rowBg = isNotFound ? 'background-color: #fff3cd;' : (index % 2 === 0 ? 'background-color: #f8f9fa;' : '');
+                    thtml += `<tr style="${rowBg}">`;
+                    thtml += `<td style="border: 1px solid #dee2e6; padding: 8px;">${isNotFound ? '⚠️ ' : ''}${type}</td>`;
+                    thtml += `<td style="border: 1px solid #dee2e6; padding: 8px; text-align: right;">${count}</td>`;
+                    thtml += `<td style="border: 1px solid #dee2e6; padding: 8px; text-align: right;">${pct}%</td>`;
+                    thtml += '</tr>';
+                });
+                
+                // Grand total row
+                thtml += `<tr style="background-color: #e9ecef; font-weight: bold;">`;
+                thtml += `<td style="border: 1px solid #dee2e6; padding: 8px;">Total</td>`;
+                thtml += `<td style="border: 1px solid #dee2e6; padding: 8px; text-align: right;">${total}</td>`;
+                thtml += `<td style="border: 1px solid #dee2e6; padding: 8px; text-align: right;">100.0%</td>`;
+                thtml += '</tr>';
+                
+                thtml += '</tbody></table>';
+                return thtml;
+            }
+            
+            html += buildTypeTable('Degree Students', '🎓', degreeStudents, totalDegree, 
+                { heading: '#0f6b3a', bg: '#eafaf1' });
+            html += buildTypeTable('Non-degree Students', '📝', nonDegreeStudents, totalNonDegree, 
+                { heading: '#8a5b0b', bg: '#fff7e6' });
+            
+            return html;
+        }
+
         function generateCategoryManagerDashboard(analytics) {
             if (!analytics) return '<p>No category data available.</p>';
             
@@ -3605,7 +3788,7 @@ function generatePeerDashboard(analytics, totalRecords) {
 
         // EVENT LISTENERS
         document.addEventListener('DOMContentLoaded', function() {
-            ['main', 'advisor', 'faculty', 'peer'].forEach(type => {
+            ['main', 'advisor', 'faculty', 'peer', 'ir'].forEach(type => {
                 const input = document.getElementById(type + 'File');
                 if (input) {
                     input.addEventListener('change', (e) => handleFileUpload(e, type));
@@ -3734,6 +3917,7 @@ function exportProcessedData() {
         pushIfPresent(desiredOrder, 'Earned Credits');                     // Earned Credits
         pushIfPresent(desiredOrder, 'Academic Standing');                  // Academic Standing
         pushIfPresent(desiredOrder, 'Predicted Support Level');            // Predicted Support Level
+        pushIfPresent(desiredOrder, {const:'STUDENT_TYPE'});                // Student Type
         pushIfPresent(desiredOrder, {const:'ADVISING_OFFICE'});            // Advising Office
         pushIfPresent(desiredOrder, {const:'PROFESSIONAL_ADVISOR'});       // Professional Advisor
         pushIfPresent(desiredOrder, 'Staff ID');                           // Staff ID (advisor file)
