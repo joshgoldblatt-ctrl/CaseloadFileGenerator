@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.8.3</title>
+    <title>Navigate Caseload File Generator v3.8.4</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -175,7 +175,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.8.3 - Released March 10, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.8.4 - Released March 11, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -184,6 +184,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.8.4</span>
+                        <span style="font-size:12px; color:#6c757d;">March 11, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Advisor mismatch table:</strong> The "Advisors in Staff File but NOT in Caseload" section now displays a table with Name, Department, and Status columns (sourced from the advisor staff file), sorted by Department then Name.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -511,6 +521,16 @@ function toAdvisingOfficeFromRole(roleLabel) {
 }
 
 
+
+        // CHANGELOG TOGGLE
+        function toggleChangelog() {
+            const body = document.getElementById('changelogBody');
+            const arrow = document.getElementById('changelogArrow');
+            if (!body || !arrow) return;
+            const isOpen = body.style.display !== 'none';
+            body.style.display = isOpen ? 'none' : 'block';
+            arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+        }
 
         // GLOBAL STATE
         const appState = {
@@ -1648,13 +1668,41 @@ function toAdvisingOfficeFromRole(roleLabel) {
             let advisorDataQuality = null;
             if (appState.data.advisor) {
                 const advisorsInFile = new Set();
+                const advisorRowMap = {}; // name -> {department, status}
                 const config = CONSTANTS.LOOKUP_CONFIGS.advisor;
                 const lookupMap = createLookupMap(appState.data.advisor, config);
                 Object.keys(lookupMap).forEach(name => advisorsInFile.add(name));
-                
+
+                // Build a map of name -> department/status from raw rows
+                // Data is array-of-arrays: data[0] = headers, data[1+] = rows
+                const advisorHeaders = appState.data.advisor[0];
+                const nameColObj = utils.findColumn(advisorHeaders, config.nameColumns);
+                const deptColIdx = advisorHeaders ? advisorHeaders.findIndex(h => h === 'Department') : -1;
+                const statusColIdx = advisorHeaders ? advisorHeaders.findIndex(h => h === 'Status') : -1;
+                for (let i = 1; i < appState.data.advisor.length; i++) {
+                    const row = appState.data.advisor[i];
+                    const name = nameColObj ? (row[nameColObj.index] || '').toString().trim() : '';
+                    if (name) {
+                        advisorRowMap[name] = {
+                            department: deptColIdx >= 0 ? (row[deptColIdx] || '').toString().trim() : '',
+                            status: statusColIdx >= 0 ? (row[statusColIdx] || '').toString().trim() : ''
+                        };
+                    }
+                }
+
                 advisorDataQuality = {
                     advisorsInCaseloadNotInFile: [...advisorsInCaseload].filter(advisor => !advisorsInFile.has(advisor)).sort(),
-                    advisorsInFileNotInCaseload: [...advisorsInFile].filter(advisor => !advisorsInCaseload.has(advisor)).sort(),
+                    advisorsInFileNotInCaseload: [...advisorsInFile]
+                        .filter(advisor => !advisorsInCaseload.has(advisor))
+                        .map(name => ({
+                            name,
+                            department: advisorRowMap[name]?.department || '',
+                            status: advisorRowMap[name]?.status || ''
+                        }))
+                        .sort((a, b) => {
+                            const deptCmp = a.department.localeCompare(b.department);
+                            return deptCmp !== 0 ? deptCmp : a.name.localeCompare(b.name);
+                        }),
                     totalAdvisorsInFile: advisorsInFile.size,
                     totalAdvisorsInCaseload: advisorsInCaseload.size
                 };
@@ -2572,10 +2620,22 @@ function generateAdvisingDashboard(analytics, totalRecords) {
             }
             
             if (dataQuality.advisorsInFileNotInCaseload.length > 0) {
-                html += `<p style="margin: 5px 0; color: #0c5460;"><strong>Advisors in Staff File but NOT in Caseload (${dataQuality.advisorsInFileNotInCaseload.length}):</strong></p>`;
-                html += '<ul style="margin: 5px 0 15px 20px; color: #0c5460;">';
-                dataQuality.advisorsInFileNotInCaseload.forEach(advisor => { html += `<li>${advisor}</li>`; });
-                html += '</ul>';
+                html += `<p style="margin: 5px 0 8px 0; color: #0c5460;"><strong>Advisors in Staff File but NOT in Caseload (${dataQuality.advisorsInFileNotInCaseload.length}):</strong></p>`;
+                html += '<table style="width:100%; border-collapse:collapse; margin-bottom:15px; font-size:13px;">';
+                html += '<thead><tr style="background-color:#d1ecf1;">';
+                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Name</th>';
+                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Department</th>';
+                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Status</th>';
+                html += '</tr></thead><tbody>';
+                dataQuality.advisorsInFileNotInCaseload.forEach((advisor, i) => {
+                    const bg = i % 2 === 0 ? '#f0f9fc' : '#ffffff';
+                    html += `<tr style="background-color:${bg};">`;
+                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${advisor.name}</td>`;
+                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${advisor.department}</td>`;
+                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${advisor.status}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
             }
             
             html += `<p style="margin: 10px 0 0 0; font-size: 12px; color: #856404;"><em>Summary: ${dataQuality.totalAdvisorsInCaseload} unique advisors in caseload, ${dataQuality.totalAdvisorsInFile} in staff file</em></p>`;
