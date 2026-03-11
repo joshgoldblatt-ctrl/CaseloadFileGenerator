@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.8.4</title>
+    <title>Navigate Caseload File Generator v3.8.6</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -175,7 +175,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.8.4 - Released March 11, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.8.6 - Released March 11, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -184,6 +184,26 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.8.6</span>
+                        <span style="font-size:12px; color:#6c757d;">March 11, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Restored mapping updates:</strong> Re-applied changes that were accidentally dropped: added <em>Business Administration AS - Online</em> (BAT), <em>Cybersecurity AAS - General</em> and <em>Cybersecurity AAS - Online</em> (MEC-COMP) to both department and sub-department mappings; corrected <em>Business Administration AS - Healthcare Management</em> sub-department code to BAT-HLTHMGMT.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.8.5</span>
+                        <span style="font-size:12px; color:#6c757d;">March 11, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Peer mismatch table:</strong> The "Peers in Peer File but NOT in Caseload" section now displays a table with Name, Peer Academic Department, and Note columns, sorted by department then name.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1034,14 +1054,14 @@ function toAdvisingOfficeFromRole(roleLabel) {
 
         // DEPARTMENT MAPPINGS
         const departmentMappings = {
-            'BAT': ['Accounting AS', 'Business Administration AS', 'Business Administration AS - General', 'Business Administration AS - Facilities Management', 'Business Administration AS - Healthcare Management', 'Paralegal CERT', 'Paralegal Studies AAS', 'Hosp. Tourism & Events Mgmt AS'],
+            'BAT': ['Accounting AS', 'Business Administration AS', 'Business Administration AS - General', 'Business Administration AS - Facilities Management', 'Business Administration AS - Healthcare Management', 'Business Administration AS - Online', 'Paralegal CERT', 'Paralegal Studies AAS', 'Hosp. Tourism & Events Mgmt AS'],
             'COMMHLTH': ['Human Services Mental Hlth AA', 'Human Services Mental Hlth AA - Health Navigation', 'Nutrition & Culinary Mgmt AAS', 'Nutrition & Culinary Mgmt AAS - Culinary Management', 'Nutrition & Culinary Mgmt AAS - Nutrition', 'Public and Community Health AS', 'Therapeutic Recreation AS'],
             'ELA': ['Edu Assoc Bilingual Child AA', 'Education AA', 'Education AA - Adolescent Educ Social Science', 'Education AA - Adolescent Education English', 'Education AA - Adolescent Education Math', 'Education AA - Adolescent Education Science', 'Education AA - Adolescent Education Spanish', 'Education AA - Childhood Education', 'Education AA - Early Childhood Education', 'Social Science and Hum AA - Deaf Studies', 'Social Science and Hum AA - International', 'Social Science and Hum AA - Japanese', 'Social Science and Hum AA - Latin Amer Stud', 'Spanish-English Translation AA', 'Social Science and Hum AA - TESOL Linguistics'],
             'ENG': ['English AA', 'English AA - General', 'English AA - Creative Writing', 'Social Science and Hum AA - Journalism'],
             'HLTSCI': ['Nursing AAS', 'Occup Thrpy Assistant AAS', 'Paramedic AAS', 'Physical Therapist Asst AAS', 'Radiologic Technology AAS', 'Veterinary Technology AAS', 'Practical Nursing CERT', 'Undeclared Health Nursing AAS', 'Undeclared Pre-Health Sci AAS', 'Undeclared Pre-Health Sci AAS - Nursing', 'Undeclared Pre-Health Sci AAS - Occupational Therapy Assistant', 'Undeclared Pre-Health Sci AAS - Paramedic', 'Undeclared Pre-Health Sci AAS - Physical Therapist Assistant', 'Undeclared Pre-Health Sci AAS - Radiologic Technology', 'Undeclared Pre-Health Sci AAS - Veterinary Technology'],
             'HUM': ['Communication Studies AA', 'Communication Studies AA - Communication Generalist', 'Communication Studies AA - Mass Communication', 'Communication Studies AA - Digital Comm & Society', 'Communication Studies AA - Pub Relations Strategic Comm', 'Communication Studies AA - Public Relations', 'Communication Studies AA - Speech Pathology', 'Film and Television AA', 'Fine Arts AS', 'Fine Arts AS - Design Studies', 'Fine Arts AS - General', 'Industrial Design Tech AAS', 'Music Performance AS', 'Music Recording Technology AAS', 'Digital Media Arts CERT', 'New Media Technology AAS', 'New Media Technology AAS - Digital Journalism', 'New Media Technology AAS - Digital Media', 'New Media Technology AAS - Entrepreneurship', 'Philosophy AA', 'Commercial Photography CERT', 'Photography AAS', 'Photography AAS - Fine Arts Option', 'Photography AAS - General', 'Theater AS'],
             'LIBARTS': ['Liberal Arts Math and Sci AS', 'Liberal Arts Math and Sci AS - Applied Mathematics', 'Liberal Arts Math and Sci AS - General Math and Science', 'Social Science and Hum AA', 'Social Science and Hum AA - Ethnic Studies', 'Social Science and Hum AA - General', 'Social Science and Hum AA - Health Humanities', 'Social Science and Hum AA - Women'],
-            'MEC': ['Cybersecurity AAS', 'Cybersecurity CERT', 'Computer Science AS', 'Computer Technology AAS', 'Computer Technology AAS - Telecommunication Option', 'Network & Info Sec CERT', 'Network Admin & Info Sec AAS', 'Network Admin & Info Sec AAS - Network Admin & Secur Opt', 'Programming/Software Dev AAS', 'Programming/Software Dev AAS - Web Programming', 'Electrical Engineering AS', 'Energy Technician AAS', 'Energy Technician AAS - Electrical', 'Energy Technician AAS - Mechanical', 'Engineering Sci Civil Eng AS', 'Mechanical Engineering AS', 'Mechanical Engineering AS - Earth Sys Sci and Envrnmtl Eng', 'Mechanical Engineering AS - General'],
+            'MEC': ['Cybersecurity AAS', 'Cybersecurity AAS - General', 'Cybersecurity AAS - Online', 'Cybersecurity CERT', 'Computer Science AS', 'Computer Technology AAS', 'Computer Technology AAS - Telecommunication Option', 'Network & Info Sec CERT', 'Network Admin & Info Sec AAS', 'Network Admin & Info Sec AAS - Network Admin & Secur Opt', 'Programming/Software Dev AAS', 'Programming/Software Dev AAS - Web Programming', 'Electrical Engineering AS', 'Energy Technician AAS', 'Energy Technician AAS - Electrical', 'Energy Technician AAS - Mechanical', 'Engineering Sci Civil Eng AS', 'Mechanical Engineering AS', 'Mechanical Engineering AS - Earth Sys Sci and Envrnmtl Eng', 'Mechanical Engineering AS - General'],
             'NAS': ['Biology AS', 'Biology AS - Biotechnology', 'Biology AS - General Biology', 'Environmental Science AS', 'Environmental Science AS - Animal Sciences', 'Environmental Science AS - General', 'Environmental Science AS - Sustainable Urban Agriculture', 'Physical Sciences AS', 'Physical Sciences AS - Chemistry', 'Physical Sciences AS - Physics'],
             'SOCSCI': ['Criminal Justice AS', 'Social Science and Hum AA - History', 'Social Science and Hum AA - Political Scienc', 'Psychology AA']
         };
@@ -1053,7 +1073,8 @@ function toAdvisingOfficeFromRole(roleLabel) {
             'Business Administration AS': 'BAT',
             'Business Administration AS - General': 'BAT',
             'Business Administration AS - Facilities Management': 'BAT',
-            'Business Administration AS - Healthcare Management': 'BAT-HLTH',
+            'Business Administration AS - Healthcare Management': 'BAT-HLTHMGMT',
+            'Business Administration AS - Online': 'BAT',
             'Paralegal CERT': 'BAT-PARALEGAL',
             'Paralegal Studies AAS': 'BAT-PARALEGAL',
             'Hosp. Tourism & Events Mgmt AS': 'BAT-TOURISM',
@@ -1131,6 +1152,8 @@ function toAdvisingOfficeFromRole(roleLabel) {
             'Social Science and Hum AA - General': 'LIBARTS-SSH',
             'Social Science and Hum AA - Women': 'LIBARTS-WGS',
             'Cybersecurity AAS': 'MEC-COMP',
+            'Cybersecurity AAS - General': 'MEC-COMP',
+            'Cybersecurity AAS - Online': 'MEC-COMP',
             'Cybersecurity CERT': 'MEC-COMP',
             'Computer Science AS': 'MEC-COMP',
             'Computer Technology AAS': 'MEC-COMP',
@@ -2288,7 +2311,38 @@ analytics.advising = {
             });
             
             const peersInCaseloadNotInFile = [...peersInCaseload].filter(peer => !peersInFile.has(peer)).sort();
-            const peersInFileNotInCaseload = [...peersInFile].filter(peer => !peersInCaseload.has(peer)).sort();
+
+            // Build map of name -> {department, note} from raw peer file rows
+            const peerRowMap = {};
+            if (appState.data.peer?.length > 1) {
+                const config = CONSTANTS.LOOKUP_CONFIGS.peer;
+                const peerHeaders = appState.data.peer[0];
+                const nameColObj = utils.findColumn(peerHeaders, config.nameColumns);
+                const deptColIdx = peerHeaders ? peerHeaders.findIndex(h => h === 'Peer Academic Department') : -1;
+                const noteColIdx = peerHeaders ? peerHeaders.findIndex(h => h === 'Note') : -1;
+                for (let i = 1; i < appState.data.peer.length; i++) {
+                    const row = appState.data.peer[i];
+                    const name = nameColObj ? (row[nameColObj.index] || '').toString().trim() : '';
+                    if (name) {
+                        peerRowMap[name] = {
+                            department: deptColIdx >= 0 ? (row[deptColIdx] || '').toString().trim() : '',
+                            note: noteColIdx >= 0 ? (row[noteColIdx] || '').toString().trim() : ''
+                        };
+                    }
+                }
+            }
+
+            const peersInFileNotInCaseload = [...peersInFile]
+                .filter(peer => !peersInCaseload.has(peer))
+                .map(name => ({
+                    name,
+                    department: peerRowMap[name]?.department || '',
+                    note: peerRowMap[name]?.note || ''
+                }))
+                .sort((a, b) => {
+                    const deptCmp = a.department.localeCompare(b.department);
+                    return deptCmp !== 0 ? deptCmp : a.name.localeCompare(b.name);
+                });
             
             return {
                 totalStudentsWithPeers,
@@ -3460,10 +3514,22 @@ function generatePeerDashboard(analytics, totalRecords) {
                 html += '</ul>';
             }
             if (dataQuality.peersInFileNotInCaseload.length > 0) {
-                html += `<p style="margin:5px 0;color:#0c5460;"><strong>Peers in Peer File but NOT in Caseload (${dataQuality.peersInFileNotInCaseload.length}):</strong></p>`;
-                html += '<ul style="margin:5px 0 15px 20px;color:#0c5460;">';
-                dataQuality.peersInFileNotInCaseload.forEach(p => html += `<li>${p}</li>`);
-                html += '</ul>';
+                html += `<p style="margin:5px 0 8px 0;color:#0c5460;"><strong>Peers in Peer File but NOT in Caseload (${dataQuality.peersInFileNotInCaseload.length}):</strong></p>`;
+                html += '<table style="width:100%; border-collapse:collapse; margin-bottom:15px; font-size:13px;">';
+                html += '<thead><tr style="background-color:#d1ecf1;">';
+                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Name</th>';
+                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Peer Academic Department</th>';
+                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Note</th>';
+                html += '</tr></thead><tbody>';
+                dataQuality.peersInFileNotInCaseload.forEach((peer, i) => {
+                    const bg = i % 2 === 0 ? '#f0f9fc' : '#ffffff';
+                    html += `<tr style="background-color:${bg};">`;
+                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${peer.name}</td>`;
+                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${peer.department}</td>`;
+                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${peer.note}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
             }
             html += `<p style="margin:10px 0 0 0;font-size:12px;color:#856404;"><em>Summary: ${dataQuality.totalPeersInCaseload} unique peers in caseload, ${dataQuality.totalPeersInFile} in peer file</em></p>`;
             html += '</div>';
