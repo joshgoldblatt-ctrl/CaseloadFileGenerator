@@ -1,9 +1,125 @@
+<!--
+================================================================================
+  App:          LaGuardia Navigate Caseload Generator
+  Version:      3.8.8
+  Released:     April 27, 2026
+  Developed by: Josh Goldblatt using Claude
+================================================================================
+  CHANGELOG (most recent first)
+--------------------------------------------------------------------------------
+  v3.8.8  2026-04-27
+    - Added semester picker UI (Fall/Spring toggle + year dropdown 2025-2030),
+      pre-set to Spring 2026, positioned above the Process button.
+    - Semester selection is required before processing; an error message is shown
+      if somehow no value is set.
+    - Added "Semester" as the first column in every exported CSV row, stamped
+      with the selected value (e.g., "Spring 2026").
+
+  v3.8.7  2026-03-11
+    - Standardized peer file department lookup to only accept "Peer Academic
+      Department" as the column name (removed legacy aliases: Department,
+      Academic Department, Peer Department, Peer Advisor Department).
+    - Updated peer file upload instructions in the UI to match.
+
+  v3.8.6  2026-03-11
+    - Restored mapping updates accidentally dropped when rebuilding from
+      caseloadapp.html (v3.8.1) instead of v3.8.2:
+      - departmentMappings BAT: added "Business Administration AS - Online"
+      - departmentMappings MEC: added "Cybersecurity AAS - General" and
+        "Cybersecurity AAS - Online"
+      - majorToStudentDeptSubMappings: added "Business Administration AS -
+        Online" -> BAT; corrected "Business Administration AS - Healthcare
+        Management" from BAT-HLTH -> BAT-HLTHMGMT; added "Cybersecurity AAS -
+        General" and "Cybersecurity AAS - Online" -> MEC-COMP.
+
+  v3.8.5  2026-03-11
+    - "Peers in Peer File but NOT in Caseload" section upgraded from a plain
+      list to a table showing Name, Peer Academic Department, and Note columns,
+      sorted by department then name. Data pulled from raw peer file rows using
+      array index access (array-of-arrays structure).
+
+  v3.8.4  2026-03-11
+    - "Advisors in Staff File but NOT in Caseload" section upgraded from a
+      plain list to a table showing Name, Department, and Status columns, sorted
+      by department then name. Data pulled from raw advisor file rows using
+      array index access (array-of-arrays structure).
+    - Fixed missing toggleChangelog() JS function (was referenced in HTML but
+      never defined after rebuild from v3.8.1 base).
+
+  v3.8.3  2026-03-10
+    - Added support for new "Academic Advisor - [Office]" role string format
+      in the Assigned Staff column for all 7 primary advisor offices:
+      ASAP, Careers in Engineering, College Discovery, CUNY 2X Tech Academy,
+      International Student Services, Student Advising Services, Veterans
+      Services. Old role strings retained for backward compatibility.
+    - Added collapsible Version History & Changelog panel below the app header.
+    - Added toggleChangelog() JS function to support the changelog toggle.
+
+  v3.8.2  2026-03-09
+    - departmentMappings BAT array: added "Business Administration AS - Online".
+    - departmentMappings MEC array: added "Cybersecurity AAS - General" and
+      "Cybersecurity AAS - Online".
+    - majorToStudentDeptSubMappings: added "Business Administration AS - Online"
+      -> BAT; corrected "Business Administration AS - Healthcare Management"
+      from BAT-HLTH -> BAT-HLTHMGMT; added "Cybersecurity AAS - General" and
+      "Cybersecurity AAS - Online" -> MEC-COMP.
+
+  v3.8.1  2026-02-20
+    - Added IR Student List file upload to classify students by type (New,
+      Transfer, Continuing, Readmit).
+    - Added Student Type dashboard tab with degree vs. non-degree breakdowns.
+    - Restructured advisor data into separate Primary and Secondary
+      advisor/office columns in the output CSV.
+    - Added Secondary Staff ID column resolved from the advisor lookup file.
+    - Added Other Advising column to flag Nondegree, Permit, and Clinical
+      enrollment statuses.
+
+  v3.8.0  2026-02
+    - Added unified flat advisor assignments table (exclusive vs. shared
+      student counts per advisor).
+    - Added median caseload calculations by advising office with interactive
+      advisor checkbox filtering and Select/Deselect All controls.
+    - Performance: analytics pre-calculated and stored in app state to prevent
+      re-processing on dashboard interactions.
+
+  v3.7.x  2026-01 – 2026-02
+    - Faculty-Student Department_sub mismatch detection and reporting.
+    - Nested subdepartment tables within Faculty Academic Department sections.
+    - Detection of students with multiple faculty mentors (same/cross-dept).
+    - Canonical office name resolution for CUNY 2X Tech and Veterans Services
+      role variants.
+    - Single-office sub-breakdown: single vs. multiple advisor assignments.
+
+  v3.5.x – v3.6.x  2026-01
+    - Category Manager tab with interactive category column selection for CSV
+      export, plus year and term (FA/SP) selector.
+    - Peer Advisor dashboard tab with assignment rates by academic department
+      and data quality reporting.
+    - Faculty data quality: match/mismatch reporting between caseload file and
+      uploaded faculty list.
+    - Student Academic Department_sub column added to output based on Major.
+    - CSV export switched from clipboard copy to direct file download with
+      date-stamped filename.
+
+  v3.0 – v3.4.x  2025
+    - Initial v3 release: full rewrite with tabbed dashboard interface
+      (Advising Office, Academic Departments, Faculty Mentors).
+    - Multi-file upload: optional advisor, faculty, and peer lookup files.
+    - Advising Office dashboard: office assignment counts, single vs. multiple
+      office breakdowns, no-office student categorization.
+    - Academic Department dashboard: department distribution with unmapped
+      major detection.
+    - Animated progress indicators for file processing and CSV export.
+    - Advisor data quality: mismatch reporting between caseload file and
+      uploaded advisor staff file.
+================================================================================
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.8.7</title>
+    <title>Navigate Caseload File Generator v3.8.8</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -175,7 +291,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.8.7 - Released March 11, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.8.8 - Released April 27, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -184,6 +300,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.8.8</span>
+                        <span style="font-size:12px; color:#6c757d;">April 27, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Semester picker:</strong> Added a semester selection control (Fall/Spring + year 2025–2030) above the Process button, pre-set to Spring 2026. Selection is required before processing. A <em>Semester</em> column is added as the first column in every exported CSV row.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -412,6 +538,34 @@
             </div>
         </div>
         
+        <!-- Semester Picker -->
+        <div style="background-color: #f0f4ff; border: 1px solid #c5d0f0; border-radius: 10px; padding: 20px 24px; margin: 24px 0;">
+            <h3 style="margin: 0 0 14px 0; color: #2c3e7a; font-size: 16px;">📅 Semester Selection <span style="color: #dc3545; font-size: 13px; font-weight: normal;">(required)</span></h3>
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <div>
+                    <div style="font-size: 12px; color: #555; margin-bottom: 6px; font-weight: 600;">TERM</div>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="termFall" onclick="selectTerm('Fall')" style="padding: 8px 20px; border-radius: 6px; border: 2px solid #c5d0f0; background: #fff; color: #555; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Fall</button>
+                        <button id="termSpring" onclick="selectTerm('Spring')" style="padding: 8px 20px; border-radius: 6px; border: 2px solid #2c3e7a; background: #2c3e7a; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Spring</button>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size: 12px; color: #555; margin-bottom: 6px; font-weight: 600;">YEAR</div>
+                    <select id="semesterYear" onchange="updateSemesterDisplay()" style="padding: 8px 14px; border-radius: 6px; border: 2px solid #c5d0f0; font-size: 14px; font-weight: 600; color: #2c3e7a; background: #fff; cursor: pointer;">
+                        <option value="2025">2025</option>
+                        <option value="2026" selected>2026</option>
+                        <option value="2027">2027</option>
+                        <option value="2028">2028</option>
+                        <option value="2029">2029</option>
+                        <option value="2030">2030</option>
+                    </select>
+                </div>
+                <div style="margin-top: 18px; padding: 8px 18px; background: #2c3e7a; color: #fff; border-radius: 6px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px;">
+                    <span id="semesterDisplay">Spring 2026</span>
+                </div>
+            </div>
+        </div>
+
         <div style="text-align: center; margin: 30px 0;">
             <button id="processBtn" disabled style="background-color: #6c757d; color: white; border: none; padding: 16px 32px; border-radius: 8px; cursor: not-allowed; font-size: 18px; font-weight: bold; box-shadow: 0 4px 8px rgba(108,117,125,0.3); transition: all 0.3s ease;">🚀 Process Files</button>
         </div>
@@ -551,6 +705,30 @@ function toAdvisingOfficeFromRole(roleLabel) {
 }
 
 
+
+        // SEMESTER PICKER
+        let selectedTerm = 'Spring';
+
+        function selectTerm(term) {
+            selectedTerm = term;
+            document.getElementById('termFall').style.background = term === 'Fall' ? '#2c3e7a' : '#fff';
+            document.getElementById('termFall').style.color = term === 'Fall' ? '#fff' : '#555';
+            document.getElementById('termFall').style.borderColor = term === 'Fall' ? '#2c3e7a' : '#c5d0f0';
+            document.getElementById('termSpring').style.background = term === 'Spring' ? '#2c3e7a' : '#fff';
+            document.getElementById('termSpring').style.color = term === 'Spring' ? '#fff' : '#555';
+            document.getElementById('termSpring').style.borderColor = term === 'Spring' ? '#2c3e7a' : '#c5d0f0';
+            updateSemesterDisplay();
+        }
+
+        function updateSemesterDisplay() {
+            const year = document.getElementById('semesterYear').value;
+            document.getElementById('semesterDisplay').textContent = selectedTerm + ' ' + year;
+        }
+
+        function getSelectedSemester() {
+            const year = document.getElementById('semesterYear').value;
+            return selectedTerm + ' ' + year;
+        }
 
         // CHANGELOG TOGGLE
         function toggleChangelog() {
@@ -1266,6 +1444,13 @@ function toAdvisingOfficeFromRole(roleLabel) {
 
         // DATA PROCESSING
         function processFiles() {
+            // Validate semester selection
+            const semester = getSelectedSemester();
+            if (!semester) {
+                utils.showStatus('Please select a semester before processing.', 'error');
+                return;
+            }
+
             utils.showProgress(true);
             utils.updateProgress(0, 'Starting file processing...', 'Initializing data structures');
             
@@ -1431,6 +1616,13 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         }
                     }
                     
+                    // Stamp semester onto every record
+                    const semesterValue = getSelectedSemester();
+                    records = records.map(record => {
+                        record['Semester'] = semesterValue;
+                        return record;
+                    });
+
                     appState.processedData = records;
                     
                     utils.updateProgress(80, 'Calculating analytics...', 'Generating dashboard statistics and insights');
@@ -4160,6 +4352,7 @@ function exportProcessedData() {
 
         // Desired column order (prebuilt), conditionally included if present
         const desiredOrder = [];
+        pushIfPresent(desiredOrder, 'Semester');                           // Semester (selected at processing time)
         pushIfPresent(desiredOrder, {const:'STUDENT_ID'});                 // Student ID
         pushIfPresent(desiredOrder, 'Name');                               // Name
         pushIfPresent(desiredOrder, 'Student List');                       // Student List
