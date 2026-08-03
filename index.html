@@ -1,12 +1,66 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.8.8
-  Released:     April 27, 2026
+  Version:      3.9.1
+  Released:     August 3, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.1  2026-08-03
+    - Featured categories are no longer tied to a single selected year/term. The
+      five term-dependent entries are now prefix matches, so every year/term
+      variant present in the data is featured (e.g. both "Enrolled in Session1 -
+      2026 Spring Term" and "... 2026 Fall Term" appear).
+    - Prefix patterns deliberately include the trailing separator (" - " or ": ").
+      This matters: a bare "Enrolled in Session1" prefix would also have captured
+      "Enrolled in Session12W - 2026 Spring Term" (96 students in the SP26 file),
+      which is a different category. Matching "Enrolled in Session1 - " excludes it.
+    - Added "Only Enrolled in Intent to CLIN - " as a featured prefix, placed
+      directly after "Enrolled in Intent to CLIN - ". It is a distinct category
+      that would not be caught by the latter's prefix.
+    - Featured sort order: entries follow the pattern list order; where one
+      pattern matches several terms, those variants are ordered chronologically
+      via termSortKey() (Spring 2026 before Fall 2026) rather than alphabetically,
+      which would have reversed them. termSortKey handles both suffix styles
+      ("2026 Spring Term" and "2026 SP").
+    - Removed the Category Manager's Year/Term selector (cm-year / cm-term /
+      cm-apply) and its click handler, along with the TERM_STATE global, termFull()
+      and buildFeaturedExact(). With featured matching now term-agnostic these had
+      no remaining function. Also removed the long-dead featuredPrefixes array and
+      isValidEnrolledCategory() stub, which had been left as no-ops.
+
+  v3.9.0  2026-08-03
+    - Major mapping: added "English AA - Journalism" to the ENG department array
+      and mapped it to sub-department ENG-JOURN. It was previously unmapped
+      entirely, so students in that major fell through to no department.
+      Note ENG-JOURN is shared with "Social Science and Hum AA - Journalism".
+    - Major mapping: moved "Therapeutic Recreation AS" from COMMHLTH to HLTSCI.
+      Removed it from the COMMHLTH department array (so it is not double-mapped)
+      and changed its sub-department code from COMMHLTH-THER to HLTSCI-THER.
+    - Category Manager: replaced the featured category list with a curated set of
+      17 entries. Added SG:CLN1, SG:PCLN, "Enrolled in Intent to CLIN", and
+      "Total Withdrawal". Removed SG:ASP2, SG:ASP3, SG:ASP4, SG:CST3, SG:MST1,
+      SG:MST3, both "New Student:" cohort entries, "Enrolled in Intent to Grad",
+      and "Only Enrolled in Intent to Grad".
+      "Total Withdrawal" needed its own term-suffix template: it is written
+      "Total Withdrawal: {year} {FA|SP}" whereas the "Enrolled in ..." entries use
+      " - {year} {Fall|Spring} Term".
+    - Category Manager: "Other Categories" are no longer one flat list sorted by
+      frequency. They are now split into 13 collapsible groups matched on name
+      prefix (Student Groups, Majors, Enrollment & Sessions, New Student Cohorts,
+      Transfer Out, Transfer In, Financial Aid, Service Indicators, Academic
+      Progress & Milestones, Graduation & Withdrawal, Advising & Registration
+      Readiness, Program Participation, Other). Sorting within each group is
+      alphabetical rather than by count, because alphabetical clusters related
+      items together (all "Major: Education AA - ..." variants land adjacent)
+      whereas frequency sorting scatters them. Group headers show the item count
+      and a badge with the number currently selected.
+      Groups are matched in array order, first match wins, so "Transfer Out:"
+      is tested before "Transfer:". The flat otherCategories array in analytics
+      is unchanged, so Select All / Select Common / Select Only Featured and the
+      CSV export continue to work against the same data.
+
   v3.8.8  2026-04-27
     - Added semester picker UI (Fall/Spring toggle + year dropdown 2025-2030),
       pre-set to Spring 2026, positioned above the Process button.
@@ -119,7 +173,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.8.8</title>
+    <title>Navigate Caseload File Generator v3.9.1</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -291,7 +345,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.8.8 - Released April 27, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.1 - Released August 3, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -300,6 +354,30 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.1</span>
+                        <span style="font-size:12px; color:#6c757d;">August 3, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>All year/terms shown in Featured:</strong> The term-dependent featured categories now match every year and term found in the data, rather than only the one selected term. Variants are listed chronologically (Spring before Fall within a year).</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Only Enrolled in Intent to CLIN</strong> added as a featured category, directly after Enrolled in Intent to CLIN.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Year/Term selector removed</strong> from the Category Manager, since featured categories no longer depend on a selected term.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.0</span>
+                        <span style="font-size:12px; color:#6c757d;">August 3, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Major mapping updates:</strong> <em>English AA - Journalism</em> added to ENG with sub-department ENG-JOURN (it was previously unmapped). <em>Therapeutic Recreation AS</em> moved from COMMHLTH to HLTSCI, with its sub-department code changed from COMMHLTH-THER to HLTSCI-THER.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Featured categories revised:</strong> The featured list is now a curated set of 17. Added SG:CLN1, SG:PCLN, Enrolled in Intent to CLIN, and Total Withdrawal; removed the ASAP status codes, CST3/MST1/MST3, the New Student cohort entries, and the Intent to Grad entries.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Other Categories grouped:</strong> Instead of one flat list sorted by frequency, other categories are now split into 13 collapsible groups (Student Groups, Majors, Enrollment &amp; Sessions, New Student Cohorts, Transfer Out, Transfer In, Financial Aid, Service Indicators, Academic Progress, Graduation &amp; Withdrawal, Advising &amp; Registration Readiness, Program Participation, Other), sorted alphabetically within each group so related items sit together. Group headers show the item count and how many are selected.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1243,10 +1321,10 @@ function toAdvisingOfficeFromRole(roleLabel) {
         // DEPARTMENT MAPPINGS
         const departmentMappings = {
             'BAT': ['Accounting AS', 'Business Administration AS', 'Business Administration AS - General', 'Business Administration AS - Facilities Management', 'Business Administration AS - Healthcare Management', 'Business Administration AS - Online', 'Paralegal CERT', 'Paralegal Studies AAS', 'Hosp. Tourism & Events Mgmt AS'],
-            'COMMHLTH': ['Human Services Mental Hlth AA', 'Human Services Mental Hlth AA - Health Navigation', 'Nutrition & Culinary Mgmt AAS', 'Nutrition & Culinary Mgmt AAS - Culinary Management', 'Nutrition & Culinary Mgmt AAS - Nutrition', 'Public and Community Health AS', 'Therapeutic Recreation AS'],
+            'COMMHLTH': ['Human Services Mental Hlth AA', 'Human Services Mental Hlth AA - Health Navigation', 'Nutrition & Culinary Mgmt AAS', 'Nutrition & Culinary Mgmt AAS - Culinary Management', 'Nutrition & Culinary Mgmt AAS - Nutrition', 'Public and Community Health AS'],
             'ELA': ['Edu Assoc Bilingual Child AA', 'Education AA', 'Education AA - Adolescent Educ Social Science', 'Education AA - Adolescent Education English', 'Education AA - Adolescent Education Math', 'Education AA - Adolescent Education Science', 'Education AA - Adolescent Education Spanish', 'Education AA - Childhood Education', 'Education AA - Early Childhood Education', 'Social Science and Hum AA - Deaf Studies', 'Social Science and Hum AA - International', 'Social Science and Hum AA - Japanese', 'Social Science and Hum AA - Latin Amer Stud', 'Spanish-English Translation AA', 'Social Science and Hum AA - TESOL Linguistics'],
-            'ENG': ['English AA', 'English AA - General', 'English AA - Creative Writing', 'Social Science and Hum AA - Journalism'],
-            'HLTSCI': ['Nursing AAS', 'Occup Thrpy Assistant AAS', 'Paramedic AAS', 'Physical Therapist Asst AAS', 'Radiologic Technology AAS', 'Veterinary Technology AAS', 'Practical Nursing CERT', 'Undeclared Health Nursing AAS', 'Undeclared Pre-Health Sci AAS', 'Undeclared Pre-Health Sci AAS - Nursing', 'Undeclared Pre-Health Sci AAS - Occupational Therapy Assistant', 'Undeclared Pre-Health Sci AAS - Paramedic', 'Undeclared Pre-Health Sci AAS - Physical Therapist Assistant', 'Undeclared Pre-Health Sci AAS - Radiologic Technology', 'Undeclared Pre-Health Sci AAS - Veterinary Technology'],
+            'ENG': ['English AA', 'English AA - General', 'English AA - Creative Writing', 'English AA - Journalism', 'Social Science and Hum AA - Journalism'],
+            'HLTSCI': ['Nursing AAS', 'Occup Thrpy Assistant AAS', 'Paramedic AAS', 'Physical Therapist Asst AAS', 'Radiologic Technology AAS', 'Therapeutic Recreation AS', 'Veterinary Technology AAS', 'Practical Nursing CERT', 'Undeclared Health Nursing AAS', 'Undeclared Pre-Health Sci AAS', 'Undeclared Pre-Health Sci AAS - Nursing', 'Undeclared Pre-Health Sci AAS - Occupational Therapy Assistant', 'Undeclared Pre-Health Sci AAS - Paramedic', 'Undeclared Pre-Health Sci AAS - Physical Therapist Assistant', 'Undeclared Pre-Health Sci AAS - Radiologic Technology', 'Undeclared Pre-Health Sci AAS - Veterinary Technology'],
             'HUM': ['Communication Studies AA', 'Communication Studies AA - Communication Generalist', 'Communication Studies AA - Mass Communication', 'Communication Studies AA - Digital Comm & Society', 'Communication Studies AA - Pub Relations Strategic Comm', 'Communication Studies AA - Public Relations', 'Communication Studies AA - Speech Pathology', 'Film and Television AA', 'Fine Arts AS', 'Fine Arts AS - Design Studies', 'Fine Arts AS - General', 'Industrial Design Tech AAS', 'Music Performance AS', 'Music Recording Technology AAS', 'Digital Media Arts CERT', 'New Media Technology AAS', 'New Media Technology AAS - Digital Journalism', 'New Media Technology AAS - Digital Media', 'New Media Technology AAS - Entrepreneurship', 'Philosophy AA', 'Commercial Photography CERT', 'Photography AAS', 'Photography AAS - Fine Arts Option', 'Photography AAS - General', 'Theater AS'],
             'LIBARTS': ['Liberal Arts Math and Sci AS', 'Liberal Arts Math and Sci AS - Applied Mathematics', 'Liberal Arts Math and Sci AS - General Math and Science', 'Social Science and Hum AA', 'Social Science and Hum AA - Ethnic Studies', 'Social Science and Hum AA - General', 'Social Science and Hum AA - Health Humanities', 'Social Science and Hum AA - Women'],
             'MEC': ['Cybersecurity AAS', 'Cybersecurity AAS - General', 'Cybersecurity AAS - Online', 'Cybersecurity CERT', 'Computer Science AS', 'Computer Technology AAS', 'Computer Technology AAS - Telecommunication Option', 'Network & Info Sec CERT', 'Network Admin & Info Sec AAS', 'Network Admin & Info Sec AAS - Network Admin & Secur Opt', 'Programming/Software Dev AAS', 'Programming/Software Dev AAS - Web Programming', 'Electrical Engineering AS', 'Energy Technician AAS', 'Energy Technician AAS - Electrical', 'Energy Technician AAS - Mechanical', 'Engineering Sci Civil Eng AS', 'Mechanical Engineering AS', 'Mechanical Engineering AS - Earth Sys Sci and Envrnmtl Eng', 'Mechanical Engineering AS - General'],
@@ -1272,7 +1350,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
             'Nutrition & Culinary Mgmt AAS - Culinary Management': 'COMMHLTH-NUT',
             'Nutrition & Culinary Mgmt AAS - Nutrition': 'COMMHLTH-NUT',
             'Public and Community Health AS': 'COMMHLTH-PUB',
-            'Therapeutic Recreation AS': 'COMMHLTH-THER',
+            'Therapeutic Recreation AS': 'HLTSCI-THER',
             'Social Science and Hum AA - Deaf Studies': 'ELA-DEAF',
             'Edu Assoc Bilingual Child AA': 'ELA-EDU',
             'Education AA': 'ELA-EDU',
@@ -1291,6 +1369,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
             'English AA': 'ENG-GEN',
             'English AA - General': 'ENG-GEN',
             'English AA - Creative Writing': 'ENG-CREATIVE',
+            'English AA - Journalism': 'ENG-JOURN',
             'Social Science and Hum AA - Journalism': 'ENG-JOURN',
             'Practical Nursing CERT': 'HLTSCI-LPN',
             'Nursing AAS': 'HLTSCI-RN',
@@ -2583,98 +2662,82 @@ analytics.advising = {
                 });
             });
             
-            const featuredPrefixes = [];
-            
-            
-// ---- Term selector state for Category Manager ----
-window.TERM_STATE = window.TERM_STATE || {
-  year: new Date().getFullYear(),
-  termCode: (new Date().getMonth() >= 0 && new Date().getMonth() <= 4) ? 'SP' : 'FA' // Jan-May -> SP, else FA
-};
+            // ---- Featured category definitions ----
+            // Each entry is either an exact match or a prefix match. Prefix entries
+            // deliberately include the separator (" - " or ": ") so that, for example,
+            // "Enrolled in Session1 - " does NOT also capture "Enrolled in Session12W - ".
+            // Prefix entries match every year/term variant present in the data.
+            const FEATURED_PATTERNS = [
+                { type: 'exact',  value: 'SG:ASAP-Official ASAP Student' },
+                { type: 'exact',  value: 'SG:CD-College Discovery Student' },
+                { type: 'exact',  value: 'SG:ISS-International Student Service' },
+                { type: 'exact',  value: 'SG:CLIP-CLIP Student' },
+                { type: 'exact',  value: 'SG:CST1-Required CS students CSE95/3+' },
+                { type: 'exact',  value: 'SG:CNOW-College Now Student' },
+                { type: 'exact',  value: 'SG:ECI-Early College Initiative' },
+                { type: 'exact',  value: 'SG:FRSH-Entering Freshman' },
+                { type: 'exact',  value: 'SG:TRNS-Entering Transfer Student' },
+                { type: 'exact',  value: 'SG:RADM-Readmit' },
+                { type: 'prefix', value: 'Enrolled in Session1 - ' },
+                { type: 'prefix', value: 'Enrolled in Session2 - ' },
+                { type: 'prefix', value: 'Enrolled in any Clinical Course - ' },
+                { type: 'prefix', value: 'Enrolled in Intent to CLIN - ' },
+                { type: 'prefix', value: 'Only Enrolled in Intent to CLIN - ' },
+                { type: 'exact',  value: 'SG:CLN1-Clinical Phase of Major' },
+                { type: 'exact',  value: 'SG:PCLN-Pre-Clinical Phase of Major' },
+                { type: 'prefix', value: 'Total Withdrawal: ' }
+            ];
 
-function termFull(year, termCode) {
-  return termCode === 'FA' ? `${year} Fall Term` : `${year} Spring Term`;
-}
-
-function buildFeaturedExact(year, termCode) {
-  const tf = termFull(year, termCode);
-  // Order matters. New Student items are placed AFTER SG:RADM-Readmit per user request.
-  return [
-    'SG:ASAP-Official ASAP Student',
-    'SG:ASP2-Applied to ASAP',
-    'SG:ASP3-Accepts ASAP Invitation',
-    'SG:ASP4-Denied/Declined ASAP',
-    'SG:CD-College Discovery Student',
-    'SG:ISS-International Student Service',
-    'SG:CLIP-CLIP Student',
-    'SG:CST1-Required CS students CSE95/3+',
-    'SG:CST3-With CST indicator',
-    'SG:MST1-Req MS Students MAT95/96',
-    'SG:MST3-With MST Indicator',
-    'SG:CNOW-College Now Student',
-    'SG:ECI-Early College Initiative',
-    'SG:FRSH-Entering Freshman',
-    'SG:TRNS-Entering Transfer Student',
-    'SG:RADM-Readmit',
-    // New Student categories come after RADM
-    `New Student: ${year} ${termCode} - First-Year`,
-    `New Student: ${year} ${termCode} - Transfer`,
-    `Enrolled in Session1 - ${tf}`,
-    `Enrolled in Session2 - ${tf}`,
-    `Enrolled in Intent to Grad - ${tf}`,
-    `Enrolled in any Clinical Course - ${tf}`,
-    `Only Enrolled in Intent to Grad ${year} ${termCode}`
-  ];
-}
-const featuredExact = buildFeaturedExact(TERM_STATE.year, TERM_STATE.termCode);
-            
-            const isValidEnrolledCategory = (category) => { return false; };
-            
-            const featuredCategories = [];
-            const otherCategories = [];
-            
-            Object.entries(categoryStats).forEach(([category, stats]) => {
-                let isFeatured = false;
-                
-                if (featuredExact.includes(category)) {
-                    isFeatured = true;
-                } else if (isValidEnrolledCategory(category)) {
-                    isFeatured = true;
-                } else {
-                    for (const prefix of featuredPrefixes) {
-                        if (category.startsWith(prefix)) {
-                            isFeatured = true;
-                            break;
-                        }
+            // Returns the index of the matching pattern, or -1 if the category is not featured.
+            function featuredPatternIndex(category) {
+                for (let i = 0; i < FEATURED_PATTERNS.length; i++) {
+                    const p = FEATURED_PATTERNS[i];
+                    if (p.type === 'exact') {
+                        if (category === p.value) return i;
+                    } else if (category.startsWith(p.value)) {
+                        return i;
                     }
                 }
-                
-                if (isFeatured) {
+                return -1;
+            }
+
+            // Sort key for the year/term suffix so multiple terms under one pattern read
+            // chronologically (Spring 2026 before Fall 2026), not alphabetically.
+            // Handles both suffix styles: "2026 Spring Term" / "2026 FA".
+            function termSortKey(category) {
+                const yearMatch = category.match(/\b(20\d{2})\b/);
+                if (!yearMatch) return null;
+                const year = parseInt(yearMatch[1], 10);
+                const tail = category.slice(yearMatch.index);
+                let termRank = 2; // unknown terms sort last within the year
+                if (/\bSpring\b|\bSP\b/.test(tail)) termRank = 0;
+                else if (/\bSummer\b|\bSU\b/.test(tail)) termRank = 1;
+                else if (/\bFall\b|\bFA\b/.test(tail)) termRank = 2;
+                return year * 10 + termRank;
+            }
+
+            const featuredCategories = [];
+            const otherCategories = [];
+
+            Object.entries(categoryStats).forEach(([category, stats]) => {
+                if (featuredPatternIndex(category) !== -1) {
                     featuredCategories.push([category, stats]);
                 } else {
                     otherCategories.push([category, stats]);
                 }
             });
-            
+
             featuredCategories.sort(([a, statsA], [b, statsB]) => {
-                const aExactIndex = featuredExact.indexOf(a);
-                const bExactIndex = featuredExact.indexOf(b);
-                const aIsEnrolled = isValidEnrolledCategory(a);
-                const bIsEnrolled = isValidEnrolledCategory(b);
-                
-                if (aExactIndex !== -1 && bExactIndex !== -1) {
-                    return aExactIndex - bExactIndex;
-                }
-                if (aExactIndex !== -1 && bExactIndex === -1) return -1;
-                if (aExactIndex === -1 && bExactIndex !== -1) return 1;
-                if (aIsEnrolled && !bIsEnrolled) return -1;
-                if (!aIsEnrolled && bIsEnrolled) return 1;
-                if (aIsEnrolled && bIsEnrolled) {
-                    return a.localeCompare(b);
-                }
-                return statsB.count - statsA.count;
+                const ai = featuredPatternIndex(a);
+                const bi = featuredPatternIndex(b);
+                if (ai !== bi) return ai - bi;
+                // Same pattern: order the year/term variants chronologically.
+                const ak = termSortKey(a);
+                const bk = termSortKey(b);
+                if (ak !== null && bk !== null && ak !== bk) return ak - bk;
+                return a.localeCompare(b);
             });
-            
+
             otherCategories.sort(([a, statsA], [b, statsB]) => {
                 if (statsB.count !== statsA.count) {
                     return statsB.count - statsA.count;
@@ -3829,12 +3892,7 @@ function generatePeerDashboard(analytics, totalRecords) {
             
             const { totalCategories, totalStudents, featuredCategories, otherCategories } = analytics;
             
-            let html = '<h4 style="color: #28a745; margin-bottom: 15px;">📋 Category Manager</h4>' +
-  `<div style="display:flex;gap:12px;align-items:center;margin:10px 0 14px 0;">`
- + `<label>Year <input id="cm-year" type="number" min="2000" max="2100" value="${TERM_STATE.year}" style="width:90px;padding:4px 6px;border:1px solid #ccc;border-radius:6px;"/></label>`
- + `<label>Term <select id="cm-term" style="padding:4px 6px;border:1px solid #ccc;border-radius:6px;"><option value="FA" ${TERM_STATE.termCode==='FA'?'selected':''}>FA</option><option value="SP" ${TERM_STATE.termCode==='SP'?'selected':''}>SP</option></select></label>`
- + `<button id="cm-apply" class="btn btn-sm" style="padding:6px 10px;border:1px solid #007bff;border-radius:6px;background:#007bff;color:#fff;">Apply</button>`
- + `</div>`;
+            let html = '<h4 style="color: #28a745; margin-bottom: 15px;">📋 Category Manager</h4>';
 
             
             // Summary statistics
@@ -3864,10 +3922,9 @@ function generatePeerDashboard(analytics, totalRecords) {
                 // Other Categories Section
                 if (otherCategories.length > 0) {
                     html += '<div>';
-                    html += '<h5 style="color: #6c757d; margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #6c757d;">📂 Other Categories</h5>';
-                    html += '<div style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6;">';
-                    html += generateCategoryTable(otherCategories, totalStudents, 'other');
-                    html += '</div>';
+                    html += '<h5 style="color: #6c757d; margin-bottom: 8px; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #6c757d;">📂 Other Categories</h5>';
+                    html += '<p style="margin: 0 0 12px 2px; font-size: 12px; color: #6c757d;">Grouped by type, alphabetical within each group. Click a group to expand.</p>';
+                    html += generateGroupedCategorySections(otherCategories, totalStudents);
                     html += '</div>';
                 }
                 
@@ -3892,6 +3949,77 @@ function generatePeerDashboard(analytics, totalRecords) {
                 html += '<div style="text-align: center; padding: 20px; color: #666; font-style: italic;">No categories found in the data.</div>';
             }
             
+            return html;
+        }
+
+        // ---- "Other Categories" grouping ----
+        // Groups are matched in array order; the first match wins, so more specific
+        // prefixes must appear before more general ones (e.g. "Transfer Out:" before
+        // "Transfer:"). Anything unmatched falls into the final "Other" bucket.
+        const CATEGORY_GROUPS = [
+            { key: 'sg',        label: 'Student Groups',                    icon: '👥', test: c => c.startsWith('SG:') },
+            { key: 'major',     label: 'Majors',                            icon: '🎓', test: c => c.startsWith('Major:') },
+            { key: 'enroll',    label: 'Enrollment & Sessions',             icon: '📝', test: c => c.startsWith('Enrolled in') || c.startsWith('Enrolled:') || c.startsWith('Only Enrolled') },
+            { key: 'cohort',    label: 'New Student Cohorts',               icon: '🌱', test: c => c.startsWith('New Student:') },
+            { key: 'transout',  label: 'Transfer Out',                      icon: '📤', test: c => c.startsWith('Transfer Out:') },
+            { key: 'transin',   label: 'Transfer In',                       icon: '📥', test: c => c.startsWith('Transfer:') },
+            { key: 'finaid',    label: 'Financial Aid',                     icon: '💵', test: c => c.startsWith('FA ') },
+            { key: 'si',        label: 'Service Indicators',                icon: '🚩', test: c => c.startsWith('SI:') },
+            { key: 'progress',  label: 'Academic Progress & Milestones',    icon: '📈', test: c => c.startsWith('Academic Standing:') || c.startsWith('SAP:') || c.startsWith('Milestone:') || c.startsWith('Completed LaGuardia Credits:') || c === 'Passed FYS' || c === 'Honors Student' || c === 'not in CS' || c === 'Not in MAT' },
+            { key: 'gradwd',    label: 'Graduation & Withdrawal',           icon: '🏁', test: c => c.startsWith('Graduation Status:') || c.startsWith('Total Withdrawal') || c.startsWith('Program Status:') },
+            { key: 'advising',  label: 'Advising & Registration Readiness', icon: '🗓️', test: c => c.startsWith('NSAR:') || c.startsWith('NO NSAR:') || c.startsWith('Eligible to Register') || c.startsWith('Continuing:') },
+            { key: 'program',   label: 'Program Participation',             icon: '⭐', test: c => c.startsWith('CLIP:') || c.startsWith('MathStart:') },
+            { key: 'unsorted',  label: 'Other',                             icon: '📂', test: () => true }
+        ];
+
+        function groupOtherCategories(categories) {
+            const buckets = new Map();
+            CATEGORY_GROUPS.forEach(g => buckets.set(g.key, []));
+
+            categories.forEach(entry => {
+                const name = entry[0];
+                const group = CATEGORY_GROUPS.find(g => g.test(name));
+                buckets.get(group.key).push(entry);
+            });
+
+            // Alphabetical within each group - this clusters related items together
+            // (e.g. all "Major: Education AA - ..." variants land next to each other),
+            // which frequency sorting scatters.
+            return CATEGORY_GROUPS
+                .map(g => ({ ...g, items: buckets.get(g.key).sort((a, b) => a[0].localeCompare(b[0])) }))
+                .filter(g => g.items.length > 0);
+        }
+
+        window.toggleCategoryGroup = function(key) {
+            const body = document.getElementById('catGroupBody_' + key);
+            const arrow = document.getElementById('catGroupArrow_' + key);
+            if (!body || !arrow) return;
+            const isOpen = body.style.display !== 'none';
+            body.style.display = isOpen ? 'none' : 'block';
+            arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+        };
+
+        function generateGroupedCategorySections(otherCategories, totalStudents) {
+            const groups = groupOtherCategories(otherCategories);
+            let html = '';
+
+            groups.forEach(group => {
+                const selectedInGroup = group.items.filter(([, stats]) => stats.selected).length;
+                html += '<div style="margin-bottom: 10px; border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden;">';
+                html += `<button onclick="toggleCategoryGroup('${group.key}')" style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:10px 14px; background:#f8f9fa; border:none; cursor:pointer; font-size:14px; font-weight:600; color:#495057; text-align:left;">`;
+                html += `<span>${group.icon} ${group.label} <span style="font-weight:400; color:#6c757d;">(${group.items.length})</span>`;
+                if (selectedInGroup > 0) {
+                    html += ` <span style="background:#d4edda; color:#155724; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; margin-left:6px;">${selectedInGroup} selected</span>`;
+                }
+                html += '</span>';
+                html += `<span id="catGroupArrow_${group.key}" style="font-size:11px; color:#6c757d; transition:transform 0.25s ease;">▼</span>`;
+                html += '</button>';
+                html += `<div id="catGroupBody_${group.key}" style="display:none; max-height:340px; overflow-y:auto; border-top:1px solid #dee2e6;">`;
+                html += generateCategoryTable(group.items, totalStudents, 'otherGrp' + group.key);
+                html += '</div>';
+                html += '</div>';
+            });
+
             return html;
         }
 
@@ -4249,53 +4377,6 @@ function generatePeerDashboard(analytics, totalRecords) {
             }, 500);
         });
     
-// Category Manager: Apply Year/Term
-document.addEventListener('click', function(e){
-  if(e.target && e.target.id === 'cm-apply'){
-    const y = parseInt(document.getElementById('cm-year').value, 10);
-    const t = document.getElementById('cm-term').value;
-    if (!isNaN(y) && (t==='FA' || t==='SP')){
-      TERM_STATE.year = y;
-      TERM_STATE.termCode = t;
-      // Re-render the Category Manager tab with updated term
-      try {
-        if (appState && appState.processedData) {
-          // Preserve current checkbox selections
-          const savedSelections = Object.assign({}, selectedCategories);
-          const categoryAnalytics = calculateCategoryAnalytics(appState.processedData);
-          // Restore saved selections for categories that still exist
-          if (categoryAnalytics.featuredCategories) {
-            categoryAnalytics.featuredCategories.forEach(([cat, stats]) => {
-              if (savedSelections.hasOwnProperty(cat)) {
-                stats.selected = savedSelections[cat];
-              }
-            });
-          }
-          if (categoryAnalytics.otherCategories) {
-            categoryAnalytics.otherCategories.forEach(([cat, stats]) => {
-              if (savedSelections.hasOwnProperty(cat)) {
-                stats.selected = savedSelections[cat];
-              }
-            });
-          }
-          // Update the stored analytics
-          appState.analytics.category = categoryAnalytics;
-          // Re-render the category content tab
-          const categoryContent = document.getElementById('categoryContent');
-          if (categoryContent) {
-            categoryContent.innerHTML = generateCategoryManagerDashboard(categoryAnalytics);
-            // Re-initialize selectedCategories from the new analytics
-            selectedCategories = {};
-            categoryAnalytics.featuredCategories.forEach(([cat, stats]) => { selectedCategories[cat] = stats.selected; });
-            categoryAnalytics.otherCategories.forEach(([cat, stats]) => { selectedCategories[cat] = stats.selected; });
-          }
-        }
-      } catch(err) {
-        console.error('Error refreshing Category Manager:', err);
-      }
-    }
-  }
-});
 
 
 
