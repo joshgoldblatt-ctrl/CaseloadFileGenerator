@@ -1,12 +1,32 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.1
+  Version:      3.9.2
   Released:     August 3, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.2  2026-08-03
+    - "Advisors in Staff File but NOT in Caseload" expanded from 3 columns to 9:
+      Staff_ID, Advisor Name, Alternate Name, First then Last, Department, Role,
+      Active, Count as advising, Notes.
+    - Removed the Status column from that table (superseded by Role / Active).
+    - Staff_ID and Advisor Name resolve through the existing advisor lookup config
+      (idColumns / nameColumns), so alternate spellings like "Staff ID" or "Name"
+      still work. The other seven columns are matched directly against the file
+      headers.
+    - Header matching for those seven is now trim + case-insensitive via
+      findHeaderIdx(). The previous strict `h === 'Department'` equality was the
+      cause of the silently-blank Department/Status columns in v3.8.4 - a trailing
+      space or different capitalization produced empty cells with no error. The
+      tolerant lookup removes that failure mode.
+    - The table is now wrapped in a horizontally scrolling container with
+      white-space:nowrap, since 9 columns exceed the panel width.
+    - Sort order unchanged: Department, then Advisor Name.
+    - Peer mismatch table intentionally left as-is (Name / Peer Academic
+      Department / Note) and still uses strict header matching.
+
   v3.9.1  2026-08-03
     - Featured categories are no longer tied to a single selected year/term. The
       five term-dependent entries are now prefix matches, so every year/term
@@ -173,7 +193,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.1</title>
+    <title>Navigate Caseload File Generator v3.9.2</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -345,7 +365,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.1 - Released August 3, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.2 - Released August 3, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -354,6 +374,17 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.2</span>
+                        <span style="font-size:12px; color:#6c757d;">August 3, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Expanded advisor mismatch table:</strong> "Advisors in Staff File but NOT in Caseload" now shows Staff_ID, Advisor Name, Alternate Name, First then Last, Department, Role, Active, Count as advising, and Notes. The Status column was removed. The table scrolls horizontally to fit.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>More forgiving header matching:</strong> Advisor file column headers are now matched ignoring case and surrounding whitespace, so a header like "Count As Advising " still resolves instead of silently producing a blank column.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1972,24 +2003,49 @@ function toAdvisingOfficeFromRole(roleLabel) {
             let advisorDataQuality = null;
             if (appState.data.advisor) {
                 const advisorsInFile = new Set();
-                const advisorRowMap = {}; // name -> {department, status}
+                const advisorRowMap = {}; // name -> {staffId, alternateName, firstThenLast, department, role, active, countAsAdvising, notes}
                 const config = CONSTANTS.LOOKUP_CONFIGS.advisor;
                 const lookupMap = createLookupMap(appState.data.advisor, config);
                 Object.keys(lookupMap).forEach(name => advisorsInFile.add(name));
 
-                // Build a map of name -> department/status from raw rows
-                // Data is array-of-arrays: data[0] = headers, data[1+] = rows
+                // Build a map of name -> detail fields from raw rows.
+                // Data is array-of-arrays: data[0] = headers, data[1+] = rows.
                 const advisorHeaders = appState.data.advisor[0];
                 const nameColObj = utils.findColumn(advisorHeaders, config.nameColumns);
-                const deptColIdx = advisorHeaders ? advisorHeaders.findIndex(h => h === 'Department') : -1;
-                const statusColIdx = advisorHeaders ? advisorHeaders.findIndex(h => h === 'Status') : -1;
+                const idColObj = utils.findColumn(advisorHeaders, config.idColumns);
+
+                // Tolerant header lookup: trims whitespace and ignores case, so a header
+                // written "Count As Advising " still resolves. Strict equality was the
+                // cause of the silently-blank columns bug in v3.8.4.
+                const findHeaderIdx = (headers, label) => {
+                    if (!headers) return -1;
+                    const target = label.trim().toLowerCase();
+                    return headers.findIndex(h => (h || '').toString().trim().toLowerCase() === target);
+                };
+
+                const altNameColIdx  = findHeaderIdx(advisorHeaders, 'Alternate Name');
+                const ftlColIdx      = findHeaderIdx(advisorHeaders, 'First then Last');
+                const deptColIdx     = findHeaderIdx(advisorHeaders, 'Department');
+                const roleColIdx     = findHeaderIdx(advisorHeaders, 'Role');
+                const activeColIdx   = findHeaderIdx(advisorHeaders, 'Active');
+                const countAdvColIdx = findHeaderIdx(advisorHeaders, 'Count as advising');
+                const notesColIdx    = findHeaderIdx(advisorHeaders, 'Notes');
+
+                const cellAt = (row, idx) => idx >= 0 ? (row[idx] || '').toString().trim() : '';
+
                 for (let i = 1; i < appState.data.advisor.length; i++) {
                     const row = appState.data.advisor[i];
                     const name = nameColObj ? (row[nameColObj.index] || '').toString().trim() : '';
                     if (name) {
                         advisorRowMap[name] = {
-                            department: deptColIdx >= 0 ? (row[deptColIdx] || '').toString().trim() : '',
-                            status: statusColIdx >= 0 ? (row[statusColIdx] || '').toString().trim() : ''
+                            staffId:         idColObj ? (row[idColObj.index] || '').toString().trim() : '',
+                            alternateName:   cellAt(row, altNameColIdx),
+                            firstThenLast:   cellAt(row, ftlColIdx),
+                            department:      cellAt(row, deptColIdx),
+                            role:            cellAt(row, roleColIdx),
+                            active:          cellAt(row, activeColIdx),
+                            countAsAdvising: cellAt(row, countAdvColIdx),
+                            notes:           cellAt(row, notesColIdx)
                         };
                     }
                 }
@@ -2000,8 +2056,14 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         .filter(advisor => !advisorsInCaseload.has(advisor))
                         .map(name => ({
                             name,
-                            department: advisorRowMap[name]?.department || '',
-                            status: advisorRowMap[name]?.status || ''
+                            staffId:         advisorRowMap[name]?.staffId || '',
+                            alternateName:   advisorRowMap[name]?.alternateName || '',
+                            firstThenLast:   advisorRowMap[name]?.firstThenLast || '',
+                            department:      advisorRowMap[name]?.department || '',
+                            role:            advisorRowMap[name]?.role || '',
+                            active:          advisorRowMap[name]?.active || '',
+                            countAsAdvising: advisorRowMap[name]?.countAsAdvising || '',
+                            notes:           advisorRowMap[name]?.notes || ''
                         }))
                         .sort((a, b) => {
                             const deptCmp = a.department.localeCompare(b.department);
@@ -2940,21 +3002,36 @@ function generateAdvisingDashboard(analytics, totalRecords) {
             
             if (dataQuality.advisorsInFileNotInCaseload.length > 0) {
                 html += `<p style="margin: 5px 0 8px 0; color: #0c5460;"><strong>Advisors in Staff File but NOT in Caseload (${dataQuality.advisorsInFileNotInCaseload.length}):</strong></p>`;
-                html += '<table style="width:100%; border-collapse:collapse; margin-bottom:15px; font-size:13px;">';
+                // Nine columns is wider than the panel, so allow horizontal scrolling
+                // rather than letting the cells compress.
+                const advCols = [
+                    ['Staff_ID',          'staffId'],
+                    ['Advisor Name',      'name'],
+                    ['Alternate Name',    'alternateName'],
+                    ['First then Last',   'firstThenLast'],
+                    ['Department',        'department'],
+                    ['Role',              'role'],
+                    ['Active',            'active'],
+                    ['Count as advising', 'countAsAdvising'],
+                    ['Notes',             'notes']
+                ];
+                html += '<div style="overflow-x:auto; margin-bottom:15px; border:1px solid #bee5eb; border-radius:4px;">';
+                html += '<table style="border-collapse:collapse; font-size:13px; min-width:100%; white-space:nowrap;">';
                 html += '<thead><tr style="background-color:#d1ecf1;">';
-                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Name</th>';
-                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Department</th>';
-                html += '<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">Status</th>';
+                advCols.forEach(([label]) => {
+                    html += `<th style="text-align:left; padding:7px 10px; border:1px solid #bee5eb; color:#0c5460;">${label}</th>`;
+                });
                 html += '</tr></thead><tbody>';
                 dataQuality.advisorsInFileNotInCaseload.forEach((advisor, i) => {
                     const bg = i % 2 === 0 ? '#f0f9fc' : '#ffffff';
                     html += `<tr style="background-color:${bg};">`;
-                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${advisor.name}</td>`;
-                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${advisor.department}</td>`;
-                    html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${advisor.status}</td>`;
+                    advCols.forEach(([, key]) => {
+                        html += `<td style="padding:6px 10px; border:1px solid #bee5eb; color:#0c5460;">${advisor[key] || ''}</td>`;
+                    });
                     html += '</tr>';
                 });
                 html += '</tbody></table>';
+                html += '</div>';
             }
             
             html += `<p style="margin: 10px 0 0 0; font-size: 12px; color: #856404;"><em>Summary: ${dataQuality.totalAdvisorsInCaseload} unique advisors in caseload, ${dataQuality.totalAdvisorsInFile} in staff file</em></p>`;
