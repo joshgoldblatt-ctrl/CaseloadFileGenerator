@@ -1,12 +1,35 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.2
+  Version:      3.9.3
   Released:     August 3, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.3  2026-08-10
+    - Paramedic secondary advising restored. The app expected "Paramedic Advisor",
+      but the relationship type had been renamed to "Academic Advisor - Paramedic
+      Program" (38 students in the SP26 file), so those students were getting no
+      value in EITHER advising office column. Added the new string to
+      SECONDARY_ADVISOR and ROLE_TO_OFFICE -> "Health Sciences/Paramedic".
+      The old "paramedic advisor" string is retained.
+    - "Academic Advisor - Cybersecurity Online Program" (16 students) added to the
+      PRIMARY advisor role list, mapped to office "CUNY 2X Tech Academy" - i.e.
+      treated the same as "Academic Advisor - CUNY 2X Tech Academy". It previously
+      matched no list at all.
+    - Added two new secondary advising roles: "CUNY Edge Advisor" -> "CUNY Edge"
+      (692 students, previously unmatched) and "Athletics Advisor" -> "Athletics"
+      (not yet present in the data; added for future files).
+    - Advising Office and Secondary Advising Office now collapse repeated office
+      names. Previously a student with two advisors from the same office produced
+      "ECI - College Now; ECI - College Now"; this affected 3,021 of the 3,472
+      populated secondary rows. The advisor NAME columns are deliberately not
+      collapsed - both advisors still appear there.
+      Dashboard counts are unaffected: calculateOfficeAnalytics already applied its
+      own uniqueness pass over the office string, and derives advisor counts from
+      the advisor column, which is unchanged.
+
   v3.9.2  2026-08-03
     - "Advisors in Staff File but NOT in Caseload" expanded from 3 columns to 9:
       Staff_ID, Advisor Name, Alternate Name, First then Last, Department, Role,
@@ -193,7 +216,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.2</title>
+    <title>Navigate Caseload File Generator v3.9.3</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -365,7 +388,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.2 - Released August 3, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.3 - Released August 10, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -374,6 +397,19 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.3</span>
+                        <span style="font-size:12px; color:#6c757d;">August 10, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Paramedic advising fixed:</strong> Added the renamed role <em>Academic Advisor - Paramedic Program</em>, which previously matched no list and left those students blank in both advising office columns. Maps to Health Sciences/Paramedic.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Cybersecurity Online added to primary:</strong> <em>Academic Advisor - Cybersecurity Online Program</em> now counts as a primary advising role with office CUNY 2X Tech Academy.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Two new secondary offices:</strong> <em>CUNY Edge Advisor</em> (CUNY Edge) and <em>Athletics Advisor</em> (Athletics).</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Repeated office names collapsed:</strong> Both advising office columns now show each office once, so two advisors from the same office no longer produce "ECI - College Now; ECI - College Now". Advisor name columns still list every advisor.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -715,6 +751,7 @@
     'academic advisor - careers in engineering': 'Careers in Engineering',
     'cuny 2x tech computer science advisor': 'CUNY 2X Tech Academy',
     'academic advisor - cuny 2x tech academy': 'CUNY 2X Tech Academy',
+    'academic advisor - cybersecurity online program': 'CUNY 2X Tech Academy',
     'veteran services advisor': 'Veterans Services',
     'veterans services advisor': 'Veterans Services',
     'academic advisor - veterans services': 'Veterans Services',
@@ -724,7 +761,10 @@
     'eci - middle college hs advisor': 'ECI - Middle College HS',
     'cuny start advisor': 'CUNY Start',
     'math start advisor': 'Math Start',
-    'paramedic advisor': 'Health Sciences/Paramedic'
+    'paramedic advisor': 'Health Sciences/Paramedic',
+    'academic advisor - paramedic program': 'Health Sciences/Paramedic',
+    'cuny edge advisor': 'CUNY Edge',
+    'athletics advisor': 'Athletics'
   },
 ROLES: {
                 ADVISOR: ['asap advisor', 'academic advisor - asap',
@@ -733,6 +773,7 @@ ROLES: {
                          'international student services advisor', 'academic advisor - international student services',
                          'careers in engineering advisor', 'academic advisor - careers in engineering',
                          'cuny 2x tech computer science advisor', 'academic advisor - cuny 2x tech academy',
+                         'academic advisor - cybersecurity online program',
                          'veteran services advisor', 'veterans services advisor', 'academic advisor - veterans services'],
                 SECONDARY_ADVISOR: [
                     'eci - college now advisor',
@@ -741,7 +782,10 @@ ROLES: {
                     'eci - middle college hs advisor',
                     'cuny start advisor',
                     'math start advisor',
-                    'paramedic advisor'
+                    'paramedic advisor',
+                    'academic advisor - paramedic program',
+                    'cuny edge advisor',
+                    'athletics advisor'
                 ],
                 FACULTY: ['faculty mentor'],
                 CLINICAL: ['clinical health faculty advisor', 'health sciences faculty advisor'],
@@ -1292,11 +1336,15 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 } catch (e) {
                     console.warn('Advisor dedup failed:', e);
                 }
-        return {
+        // Office names are collapsed to unique values, so a student with two
+                // advisors from the same office shows "ECI - College Now" rather than
+                // "ECI - College Now; ECI - College Now". The advisor name columns are
+                // NOT collapsed - both advisors still appear there.
+                return {
                     professionalAdvisor: advisors.join('; ') || null,
-                    advisingOffice: offices.join('; ') || null,
+                    advisingOffice: [...new Set(offices)].join('; ') || null,
                     secondaryProfessionalAdvisor: secondaryAdvisors.join('; ') || null,
-                    secondaryAdvisingOffice: secondaryOffices.join('; ') || null
+                    secondaryAdvisingOffice: [...new Set(secondaryOffices)].join('; ') || null
                 };
             },
 
