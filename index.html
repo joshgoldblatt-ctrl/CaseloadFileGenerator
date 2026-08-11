@@ -1,12 +1,30 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.4
+  Version:      3.9.5
   Released:     August 3, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.5  2026-08-11
+    - The "Advisors in Caseload but NOT in Advisor Staff File" check now always
+      renders, showing a green "none" confirmation when there are no mismatches.
+      Previously the block was skipped entirely at zero, so if the OTHER direction
+      had mismatches you saw only that one section and had no way to tell whether
+      this check had passed or simply had not run.
+    - Renamed the heading from "Professional Advisors..." to "Primary Advisors..."
+      to match the terminology used elsewhere in the app.
+    - Scope confirmed unchanged: the check reads the Professional Advisor column,
+      which is populated only from CONSTANTS.ROLES.ADVISOR (the primary list), so
+      it already covers exactly the "Academic Advisor - X" relationship types and
+      nothing else. Note "Academic Advisor - Paramedic Program" contains the words
+      "Academic Advisor" but is mapped as SECONDARY, so it is correctly excluded.
+      As of the SP26 file no legacy primary role strings ("ASAP Advisor",
+      "College Discovery Counselor", etc.) remain in the data, though they are
+      still retained in the app for backward compatibility.
+    - Reworded the all-clear box shown when both directions are clean.
+
   v3.9.4  2026-08-11
     - Added "Graduation Status" as a standard exported column, populated from the
       Category field the same way Academic Standing is. Positioned directly after
@@ -239,7 +257,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.4</title>
+    <title>Navigate Caseload File Generator v3.9.5</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -411,7 +429,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.4 - Released August 11, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.5 - Released August 11, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -420,6 +438,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.5</span>
+                        <span style="font-size:12px; color:#6c757d;">August 11, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>All-clear confirmation for primary advisors:</strong> The "Primary Advisors in Caseload but NOT in Advisor Staff File" check now always appears, showing a green confirmation when there are no mismatches instead of being hidden. A clean result is no longer indistinguishable from the check not running.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -3094,11 +3122,20 @@ function generateAdvisingDashboard(analytics, totalRecords) {
             html += '<div style="margin-bottom: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">';
             html += '<p style="margin: 0 0 10px 0; font-weight: bold; color: #856404;">⚠️ Advisor Data Mismatches Found:</p>';
             
+            // Always render this check, pass or fail. Previously it was hidden entirely
+            // when the count was zero, so a clean result was indistinguishable from the
+            // check not having run - there was no way to tell "all matched" apart from
+            // "nothing was checked".
             if (dataQuality.advisorsInCaseloadNotInFile.length > 0) {
-                html += `<p style="margin: 5px 0; color: #721c24;"><strong>Professional Advisors in Caseload but NOT in Advisor Staff File (${dataQuality.advisorsInCaseloadNotInFile.length}):</strong></p>`;
+                html += `<p style="margin: 5px 0; color: #721c24;"><strong>Primary Advisors in Caseload but NOT in Advisor Staff File (${dataQuality.advisorsInCaseloadNotInFile.length}):</strong></p>`;
                 html += '<ul style="margin: 5px 0 15px 20px; color: #721c24;">';
                 dataQuality.advisorsInCaseloadNotInFile.forEach(advisor => { html += `<li>${advisor}</li>`; });
                 html += '</ul>';
+            } else {
+                html += '<div style="margin: 5px 0 15px 0; padding: 10px 12px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">';
+                html += `<p style="margin: 0; color: #155724;"><strong>✅ Primary Advisors in Caseload but NOT in Advisor Staff File: none</strong></p>`;
+                html += `<p style="margin: 4px 0 0 0; font-size: 12px; color: #155724;"><em>All ${dataQuality.totalAdvisorsInCaseload} primary advisors in the caseload file were found in the advisor staff file.</em></p>`;
+                html += '</div>';
             }
             
             if (dataQuality.advisorsInFileNotInCaseload.length > 0) {
@@ -3139,8 +3176,8 @@ function generateAdvisingDashboard(analytics, totalRecords) {
             html += '</div>';
         } else {
             html += '<div style="margin-bottom: 20px; padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px;">';
-            html += '<p style="margin: 0; font-weight: bold; color: #155724;">✅ All professional advisors match between files!</p>';
-            html += `<p style="margin: 5px 0 0 0; font-size: 12px; color: #155724;"><em>${dataQuality.totalAdvisorsInCaseload} unique advisors found in both files</em></p>`;
+            html += '<p style="margin: 0; font-weight: bold; color: #155724;">✅ All primary advisors match between files!</p>';
+            html += `<p style="margin: 5px 0 0 0; font-size: 12px; color: #155724;"><em>${dataQuality.totalAdvisorsInCaseload} unique primary advisors found in both files, with no unmatched entries in either direction</em></p>`;
             html += '</div>';
         }
     }
