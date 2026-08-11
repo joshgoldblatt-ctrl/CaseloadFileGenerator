@@ -1,12 +1,35 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.3
+  Version:      3.9.4
   Released:     August 3, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.4  2026-08-11
+    - Added "Graduation Status" as a standard exported column, populated from the
+      Category field the same way Academic Standing is. Positioned directly after
+      Academic Standing in the CSV.
+    - The "Graduation Status:" prefix is stripped, so the column holds "Degree
+      Awarded" rather than "Graduation Status: Degree Awarded" - matching how
+      Academic Standing already behaves.
+    - Extraction is PREFIX-based, not matched against a fixed list, so new statuses
+      appear automatically. Note this differs from determineAcademicStanding(),
+      which uses a closed list of five and would silently blank on a new value.
+      Left as-is for now, but the two functions are intentionally not symmetrical.
+    - Prefix stripping uses /^Graduation Status\s*:\s*/i because spacing is not
+      consistent across category types in the source data: graduation categories
+      are written "Graduation Status: X" (single space) while academic standing
+      categories are written "Academic Standing:  X" (double space).
+    - Students may hold more than one graduation status (72 in the SP26 file, most
+      often "Degree Awarded" alongside "Eligible to Apply" - a degree completed in
+      one program while eligible in another). All values are kept and joined with
+      "; ", de-duplicated, in the order they appear in the Category field.
+    - 8 distinct values present in the SP26 file: Degree Awarded, Eligible to Apply,
+      Applied for Graduation, Program in Review, Denied, Needs to Finish Pending
+      Work, Withdrawn, Approved.
+
   v3.9.3  2026-08-10
     - Paramedic secondary advising restored. The app expected "Paramedic Advisor",
       but the relationship type had been renamed to "Academic Advisor - Paramedic
@@ -216,7 +239,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.3</title>
+    <title>Navigate Caseload File Generator v3.9.4</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -388,7 +411,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.3 - Released August 10, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.4 - Released August 11, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -397,6 +420,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.4</span>
+                        <span style="font-size:12px; color:#6c757d;">August 11, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>New Graduation Status column:</strong> Pulled from the Category field by prefix and exported as a standard column, placed right after Academic Standing. The prefix is stripped, so values read <em>Degree Awarded</em>, <em>Eligible to Apply</em>, and so on. Students holding more than one status show all of them joined with "; ".</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -808,6 +841,7 @@ ROLES: {
                 PROGRAM_DIRECTOR: 'Program Director',
                 LIBRARIAN: 'Librarian',
                 ACADEMIC_STANDING: 'Academic Standing',
+                GRADUATION_STATUS: 'Graduation Status',
                 Major: 'Major',
                 NAV_M: 'Navigate Major',
                 STUDENT_DEPT: 'Student Academic Department',
@@ -1353,6 +1387,24 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 return standings.find(standing => category.includes(standing)) || null;
             },
 
+            determineGraduationStatus(category) {
+                // Prefix-based rather than matched against a fixed list, so any new
+                // status Navigate introduces is picked up automatically. (Contrast
+                // determineAcademicStanding above, which uses a closed list.)
+                // The source prefix spacing is inconsistent between category types
+                // ("Graduation Status: X" vs "Academic Standing:  X"), so the prefix
+                // is stripped with a regex that tolerates any amount of whitespace.
+                const statuses = category
+                    .split(',')
+                    .map(item => item.trim())
+                    .filter(item => /^Graduation Status\s*:/i.test(item))
+                    .map(item => item.replace(/^Graduation Status\s*:\s*/i, '').trim())
+                    .filter(Boolean);
+                // Students can legitimately hold more than one (e.g. a degree awarded
+                // in one program while eligible to apply in another) - keep all of them.
+                return [...new Set(statuses)].join('; ') || null;
+            },
+
             extractMajorFromCategory(category) {
                 const majorItem = category.split(',').find(item => item.trim().startsWith('Major:'));
                 return majorItem ? majorItem.replace('Major: ', '').trim() : null;
@@ -1724,6 +1776,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         record[CONSTANTS.COLUMNS.LIBRARIAN] = utils.extractStaffByRole(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '', 'librarian');
                         
                         record[CONSTANTS.COLUMNS.ACADEMIC_STANDING] = utils.determineAcademicStanding(record[CONSTANTS.COLUMNS.CATEGORY] || '');
+                        record[CONSTANTS.COLUMNS.GRADUATION_STATUS] = utils.determineGraduationStatus(record[CONSTANTS.COLUMNS.CATEGORY] || '');
                         
                         // NAV_M is populated via header normalization from raw 'Major' -> 'Navigate Major'
                         record[CONSTANTS.COLUMNS.Major] = utils.extractMajorFromCategory(record[CONSTANTS.COLUMNS.CATEGORY] || '');
@@ -4340,6 +4393,7 @@ function generatePeerDashboard(analytics, totalRecords) {
                         CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR, CONSTANTS.COLUMNS.ADVISING_OFFICE,
                         CONSTANTS.COLUMNS.FACULTY_MENTOR, CONSTANTS.COLUMNS.PEER_ADVISOR, CONSTANTS.COLUMNS.PROGRAM_DIRECTOR,
                         CONSTANTS.COLUMNS.LIBRARIAN, CONSTANTS.COLUMNS.ACADEMIC_STANDING,
+                        CONSTANTS.COLUMNS.GRADUATION_STATUS,
                         CONSTANTS.COLUMNS.STUDENT_DEPT, CONSTANTS.COLUMNS.STUDENT_DEPT_SUB
                     ];
                     
@@ -4567,6 +4621,7 @@ function exportProcessedData() {
         pushIfPresent(desiredOrder, 'Cumulative GPA');                     // Cumulative GPA
         pushIfPresent(desiredOrder, 'Earned Credits');                     // Earned Credits
         pushIfPresent(desiredOrder, 'Academic Standing');                  // Academic Standing
+        pushIfPresent(desiredOrder, 'Graduation Status');                  // Graduation Status
         pushIfPresent(desiredOrder, 'Predicted Support Level');            // Predicted Support Level
         pushIfPresent(desiredOrder, {const:'STUDENT_TYPE'});                // Student Type
         pushIfPresent(desiredOrder, {const:'ADVISING_OFFICE'});            // Advising Office
