@@ -1,12 +1,23 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.5
-  Released:     August 3, 2026
+  Version:      3.9.6
+  Released:     August 12, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.6  2026-08-12
+    - Primary Advising Office is no longer collapsed to unique values; it is
+      kept positionally aligned with the Professional Advisor list (advisor i
+      pairs with office i), so a student with two advisors from the same
+      office now shows "ASAP; ASAP" alongside both advisor names. The earlier
+      collapse broke this alignment and caused the Advising Metrics App to
+      silently drop advisors beyond the office-list length (5 students in the
+      SP26 caseload lost an advisor assignment in the Tableau export).
+      Secondary Advising Office remains collapsed - nothing consumes it
+      positionally, and the cosmetic benefit there was the original point.
+
   v3.9.5  2026-08-11
     - The "Advisors in Caseload but NOT in Advisor Staff File" check now always
       renders, showing a green "none" confirmation when there are no mismatches.
@@ -257,7 +268,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.5</title>
+    <title>Navigate Caseload File Generator v3.9.6</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -429,7 +440,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.5 - Released August 11, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.6 - Released August 12, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -438,6 +449,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.6</span>
+                        <span style="font-size:12px; color:#6c757d;">August 12, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Primary Advising Office alignment restored:</strong> The primary Advising Office list is no longer collapsed to unique values — it stays positionally aligned with the Professional Advisor list, so a student with two advisors from the same office shows the office repeated ("ASAP; ASAP") alongside both advisor names. The earlier collapse broke advisor-office pairing in the Advising Metrics App, which silently dropped advisors beyond the office-list length (5 students in the SP26 caseload). Secondary Advising Office remains collapsed, as nothing reads it positionally.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1398,13 +1419,16 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 } catch (e) {
                     console.warn('Advisor dedup failed:', e);
                 }
-        // Office names are collapsed to unique values, so a student with two
-                // advisors from the same office shows "ECI - College Now" rather than
-                // "ECI - College Now; ECI - College Now". The advisor name columns are
-                // NOT collapsed - both advisors still appear there.
+        // v3.9.6: The PRIMARY Advising Office list is intentionally NOT collapsed —
+                // it must stay positionally aligned with the Professional Advisor list
+                // (advisor i pairs with office i). A student with two advisors from the
+                // same office shows "ASAP; ASAP" so downstream consumers (the Advising
+                // Metrics App) can pair each advisor with their office by position.
+                // Secondary offices remain collapsed to unique values (cosmetic only —
+                // nothing consumes them positionally).
                 return {
                     professionalAdvisor: advisors.join('; ') || null,
-                    advisingOffice: [...new Set(offices)].join('; ') || null,
+                    advisingOffice: offices.join('; ') || null,
                     secondaryProfessionalAdvisor: secondaryAdvisors.join('; ') || null,
                     secondaryAdvisingOffice: [...new Set(secondaryOffices)].join('; ') || null
                 };
