@@ -1,22 +1,91 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.6
-  Released:     August 12, 2026
+  Version:      3.9.8
+  Released:     August 3, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
-  v3.9.6  2026-08-12
-    - Primary Advising Office is no longer collapsed to unique values; it is
-      kept positionally aligned with the Professional Advisor list (advisor i
-      pairs with office i), so a student with two advisors from the same
-      office now shows "ASAP; ASAP" alongside both advisor names. The earlier
-      collapse broke this alignment and caused the Advising Metrics App to
-      silently drop advisors beyond the office-list length (5 students in the
-      SP26 caseload lost an advisor assignment in the Tableau export).
-      Secondary Advising Office remains collapsed - nothing consumes it
-      positionally, and the cosmetic benefit there was the original point.
+  v3.9.8  2026-08-17
+    - Synced mappings to the revised Academic_Department_and_Major_List.csv (122
+      majors). App and CSV now agree on every major in both directions.
+    - NEW MAJOR: "Social Science and Hum AA - Secondary Education" added to the ELA
+      department array and mapped to sub-department ELA-EDUSECONDARY. This was the
+      single unmapped student in the FA26 file.
+    - ELA education sub-departments split. Previously nine majors all shared the
+      flat code ELA-EDU; that code now applies only to the base "Education AA".
+      The eight specific tracks were re-coded:
+        Edu Assoc Bilingual Child AA                    -> ELA-EDUBILINGUAL
+        Education AA - Adolescent Educ Social Science   -> ELA-EDUSECONDARY
+        Education AA - Adolescent Education English     -> ELA-EDUSECONDARY
+        Education AA - Adolescent Education Math        -> ELA-EDUSECONDARY
+        Education AA - Adolescent Education Science     -> ELA-EDUSECONDARY
+        Education AA - Adolescent Education Spanish     -> ELA-EDUSECONDARY
+        Education AA - Childhood Education              -> ELA-EDUCHILD
+        Education AA - Early Childhood Education        -> ELA-EDUEARLYCHILD
+      373 students in the FA26 file move to a new sub-department code as a result:
+      ELA-EDUEARLYCHILD 212, ELA-EDUCHILD 96, ELA-EDUSECONDARY 45 (44 from the
+      Adolescent tracks plus the 1 new Secondary Education student),
+      ELA-EDUBILINGUAL 20.
+      Anything keyed on the old flat ELA-EDU downstream (Tableau, saved filters,
+      prior exports) will need updating - ELA-EDU no longer covers these students.
+    - "Communication Studies AA - Mass Communication" given sub-department HUM-COMM.
+      It was already in the HUM department array but had NEVER had a sub-department
+      mapping, so it silently produced a blank sub code. No students carry this
+      major in the SP26 or FA26 files, which is why it went unnoticed.
+    - Department mappings otherwise unchanged. No majors remain app-only: the CSV
+      now includes "Cybersecurity AAS" and "Communication Studies AA - Mass
+      Communication", both of which were previously retained for backward
+      compatibility against the reference list.
+
+  v3.9.7  2026-08-17
+    - The "Major Listed but No Department Mapping" row is now expandable inline;
+      clicking it reveals the unmapped major names and counts directly beneath it.
+    - Removed the separate "Students with Majors but No Department Mapping" panel
+      that v3.9.6 added below the grand total. The names were already being
+      rendered there, but detached from the row that prompts the question and far
+      enough down the page to be missed - especially at low counts (the FA26 file
+      has exactly ONE unmapped student). Two displays of the same data was the
+      actual problem, so the data now appears in one place, attached to its row.
+    - The "No Major Listed" row is deliberately NOT expandable and now carries the
+      clarifying note 'no "Major:" entry in Category', because these students have
+      no major name to reveal - that absence is what puts them in the bucket.
+      This distinction was not evident from the old label.
+    - The "Students without Academic Department" block is now custom markup rather
+      than utils.createTable, so its column widths line up with the collapsible
+      department rows above it.
+    - Reuses the existing toggleAcademicDept() with the reserved id 'UNMAPPED'.
+
+  v3.9.6  2026-08-17
+    - Academic Departments dashboard: department rows are now collapsible. Expanding
+      a department shows the majors contributing to its total, with columns Major,
+      Sub-Department, Students, and % of Dept. Departments start collapsed and are
+      sorted alphabetically; majors within a department are sorted by count desc.
+    - NOTE ON DENOMINATORS: the percentage on a department row is of ALL students,
+      while percentages inside an expanded department are of THAT DEPARTMENT (so
+      they total 100% within it). These are deliberately different bases; the
+      column headers read "% of Total" and "% of Dept" to distinguish them.
+    - calculateAcademicDepartmentAnalytics() now also returns departmentMajors
+      (dept -> major -> {count, deptSub}) and unmappedMajorCounts. Both are built
+      in the single existing pass over the records, so no extra scan is added.
+    - The "Students with Majors but No Department Mapping" panel now lists the
+      offending major names with counts, instead of only stating that some exist.
+      Previously the count gave no indication of which mapping was missing.
+    - Sub-department mapping changed for two majors, per the updated
+      Academic_Department_and_Major_List.csv:
+        "Human Services Mental Hlth AA"                     COMMHLTH-HUM -> COMMHLTH-HUMSERV
+        "Human Services Mental Hlth AA - Health Navigation" COMMHLTH-HUM -> COMMHLTH-HUMSERV
+      (198 students affected in the SP26 file.)
+    - No department mappings changed. The three NONDEGREE majors already mapped
+      correctly via the hardcoded list at the top of mapToAcademicDepartment(),
+      which sits OUTSIDE the departmentMappings object - worth knowing, since a
+      future non-degree major must be added to that array specifically.
+    - Deliberately retained two majors that the new CSV omits:
+        "Cybersecurity AAS" (MEC / MEC-COMP) - 322 students still carry it in SP26,
+          so removing it would have stranded them in the unmapped bucket.
+        "Communication Studies AA - Mass Communication" (HUM) - no students, kept
+          for backward compatibility at no cost.
 
   v3.9.5  2026-08-11
     - The "Advisors in Caseload but NOT in Advisor Staff File" check now always
@@ -268,7 +337,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.6</title>
+    <title>Navigate Caseload File Generator v3.9.8</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -440,7 +509,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.6 - Released August 12, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.8 - Released August 17, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -452,11 +521,36 @@
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
-                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.6</span>
-                        <span style="font-size:12px; color:#6c757d;">August 12, 2026</span>
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.8</span>
+                        <span style="font-size:12px; color:#6c757d;">August 17, 2026</span>
                     </div>
                     <ul style="margin:4px 0 0 0; padding-left:20px;">
-                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Primary Advising Office alignment restored:</strong> The primary Advising Office list is no longer collapsed to unique values — it stays positionally aligned with the Professional Advisor list, so a student with two advisors from the same office shows the office repeated ("ASAP; ASAP") alongside both advisor names. The earlier collapse broke advisor-office pairing in the Advising Metrics App, which silently dropped advisors beyond the office-list length (5 students in the SP26 caseload). Secondary Advising Office remains collapsed, as nothing reads it positionally.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>New major:</strong> <em>Social Science and Hum AA - Secondary Education</em> added to ELA with sub-department ELA-EDUSECONDARY.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>ELA education codes split:</strong> The flat ELA-EDU code now applies only to the base <em>Education AA</em>. The eight specific tracks move to ELA-EDUBILINGUAL, ELA-EDUCHILD, ELA-EDUEARLYCHILD, and ELA-EDUSECONDARY — 373 students in the FA26 file change sub-department code.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Missing sub-department filled:</strong> <em>Communication Studies AA - Mass Communication</em> now maps to HUM-COMM. It previously had a department but no sub-department code.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.7</span>
+                        <span style="font-size:12px; color:#6c757d;">August 17, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Unmapped majors shown inline:</strong> Click the "Major Listed but No Department Mapping" row to see the major names and counts right there. The separate panel below the table has been removed, since having the same data in two places was easy to miss in one and confusing in both.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Clearer "No Major Listed" label:</strong> Now notes that these students have no "Major:" entry in their Category field, which is why no major name can be shown for them.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.6</span>
+                        <span style="font-size:12px; color:#6c757d;">August 17, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Collapsible academic departments:</strong> Click a department to see the majors making up its total, with sub-department code, student count, and share of the department. Departments start collapsed.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Unmapped majors now named:</strong> The "Majors but No Department Mapping" panel lists the specific majors and their counts, so you can see exactly which mappings are missing.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Sub-department update:</strong> <em>Human Services Mental Hlth AA</em> and its Health Navigation variant moved from COMMHLTH-HUM to COMMHLTH-HUMSERV.</li>
                     </ul>
                 </div>
 
@@ -1419,16 +1513,13 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 } catch (e) {
                     console.warn('Advisor dedup failed:', e);
                 }
-        // v3.9.6: The PRIMARY Advising Office list is intentionally NOT collapsed —
-                // it must stay positionally aligned with the Professional Advisor list
-                // (advisor i pairs with office i). A student with two advisors from the
-                // same office shows "ASAP; ASAP" so downstream consumers (the Advising
-                // Metrics App) can pair each advisor with their office by position.
-                // Secondary offices remain collapsed to unique values (cosmetic only —
-                // nothing consumes them positionally).
+        // Office names are collapsed to unique values, so a student with two
+                // advisors from the same office shows "ECI - College Now" rather than
+                // "ECI - College Now; ECI - College Now". The advisor name columns are
+                // NOT collapsed - both advisors still appear there.
                 return {
                     professionalAdvisor: advisors.join('; ') || null,
-                    advisingOffice: offices.join('; ') || null,
+                    advisingOffice: [...new Set(offices)].join('; ') || null,
                     secondaryProfessionalAdvisor: secondaryAdvisors.join('; ') || null,
                     secondaryAdvisingOffice: [...new Set(secondaryOffices)].join('; ') || null
                 };
@@ -1505,7 +1596,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
         const departmentMappings = {
             'BAT': ['Accounting AS', 'Business Administration AS', 'Business Administration AS - General', 'Business Administration AS - Facilities Management', 'Business Administration AS - Healthcare Management', 'Business Administration AS - Online', 'Paralegal CERT', 'Paralegal Studies AAS', 'Hosp. Tourism & Events Mgmt AS'],
             'COMMHLTH': ['Human Services Mental Hlth AA', 'Human Services Mental Hlth AA - Health Navigation', 'Nutrition & Culinary Mgmt AAS', 'Nutrition & Culinary Mgmt AAS - Culinary Management', 'Nutrition & Culinary Mgmt AAS - Nutrition', 'Public and Community Health AS'],
-            'ELA': ['Edu Assoc Bilingual Child AA', 'Education AA', 'Education AA - Adolescent Educ Social Science', 'Education AA - Adolescent Education English', 'Education AA - Adolescent Education Math', 'Education AA - Adolescent Education Science', 'Education AA - Adolescent Education Spanish', 'Education AA - Childhood Education', 'Education AA - Early Childhood Education', 'Social Science and Hum AA - Deaf Studies', 'Social Science and Hum AA - International', 'Social Science and Hum AA - Japanese', 'Social Science and Hum AA - Latin Amer Stud', 'Spanish-English Translation AA', 'Social Science and Hum AA - TESOL Linguistics'],
+            'ELA': ['Edu Assoc Bilingual Child AA', 'Education AA', 'Education AA - Adolescent Educ Social Science', 'Education AA - Adolescent Education English', 'Education AA - Adolescent Education Math', 'Education AA - Adolescent Education Science', 'Education AA - Adolescent Education Spanish', 'Education AA - Childhood Education', 'Education AA - Early Childhood Education', 'Social Science and Hum AA - Deaf Studies', 'Social Science and Hum AA - Secondary Education', 'Social Science and Hum AA - International', 'Social Science and Hum AA - Japanese', 'Social Science and Hum AA - Latin Amer Stud', 'Spanish-English Translation AA', 'Social Science and Hum AA - TESOL Linguistics'],
             'ENG': ['English AA', 'English AA - General', 'English AA - Creative Writing', 'English AA - Journalism', 'Social Science and Hum AA - Journalism'],
             'HLTSCI': ['Nursing AAS', 'Occup Thrpy Assistant AAS', 'Paramedic AAS', 'Physical Therapist Asst AAS', 'Radiologic Technology AAS', 'Therapeutic Recreation AS', 'Veterinary Technology AAS', 'Practical Nursing CERT', 'Undeclared Health Nursing AAS', 'Undeclared Pre-Health Sci AAS', 'Undeclared Pre-Health Sci AAS - Nursing', 'Undeclared Pre-Health Sci AAS - Occupational Therapy Assistant', 'Undeclared Pre-Health Sci AAS - Paramedic', 'Undeclared Pre-Health Sci AAS - Physical Therapist Assistant', 'Undeclared Pre-Health Sci AAS - Radiologic Technology', 'Undeclared Pre-Health Sci AAS - Veterinary Technology'],
             'HUM': ['Communication Studies AA', 'Communication Studies AA - Communication Generalist', 'Communication Studies AA - Mass Communication', 'Communication Studies AA - Digital Comm & Society', 'Communication Studies AA - Pub Relations Strategic Comm', 'Communication Studies AA - Public Relations', 'Communication Studies AA - Speech Pathology', 'Film and Television AA', 'Fine Arts AS', 'Fine Arts AS - Design Studies', 'Fine Arts AS - General', 'Industrial Design Tech AAS', 'Music Performance AS', 'Music Recording Technology AAS', 'Digital Media Arts CERT', 'New Media Technology AAS', 'New Media Technology AAS - Digital Journalism', 'New Media Technology AAS - Digital Media', 'New Media Technology AAS - Entrepreneurship', 'Philosophy AA', 'Commercial Photography CERT', 'Photography AAS', 'Photography AAS - Fine Arts Option', 'Photography AAS - General', 'Theater AS'],
@@ -1527,23 +1618,24 @@ function toAdvisingOfficeFromRole(roleLabel) {
             'Paralegal CERT': 'BAT-PARALEGAL',
             'Paralegal Studies AAS': 'BAT-PARALEGAL',
             'Hosp. Tourism & Events Mgmt AS': 'BAT-TOURISM',
-            'Human Services Mental Hlth AA': 'COMMHLTH-HUM',
-            'Human Services Mental Hlth AA - Health Navigation': 'COMMHLTH-HUM',
+            'Human Services Mental Hlth AA': 'COMMHLTH-HUMSERV',
+            'Human Services Mental Hlth AA - Health Navigation': 'COMMHLTH-HUMSERV',
             'Nutrition & Culinary Mgmt AAS': 'COMMHLTH-NUT',
             'Nutrition & Culinary Mgmt AAS - Culinary Management': 'COMMHLTH-NUT',
             'Nutrition & Culinary Mgmt AAS - Nutrition': 'COMMHLTH-NUT',
             'Public and Community Health AS': 'COMMHLTH-PUB',
             'Therapeutic Recreation AS': 'HLTSCI-THER',
             'Social Science and Hum AA - Deaf Studies': 'ELA-DEAF',
-            'Edu Assoc Bilingual Child AA': 'ELA-EDU',
+            'Social Science and Hum AA - Secondary Education': 'ELA-EDUSECONDARY',
+            'Edu Assoc Bilingual Child AA': 'ELA-EDUBILINGUAL',
             'Education AA': 'ELA-EDU',
-            'Education AA - Adolescent Educ Social Science': 'ELA-EDU',
-            'Education AA - Adolescent Education English': 'ELA-EDU',
-            'Education AA - Adolescent Education Math': 'ELA-EDU',
-            'Education AA - Adolescent Education Science': 'ELA-EDU',
-            'Education AA - Adolescent Education Spanish': 'ELA-EDU',
-            'Education AA - Childhood Education': 'ELA-EDU',
-            'Education AA - Early Childhood Education': 'ELA-EDU',
+            'Education AA - Adolescent Educ Social Science': 'ELA-EDUSECONDARY',
+            'Education AA - Adolescent Education English': 'ELA-EDUSECONDARY',
+            'Education AA - Adolescent Education Math': 'ELA-EDUSECONDARY',
+            'Education AA - Adolescent Education Science': 'ELA-EDUSECONDARY',
+            'Education AA - Adolescent Education Spanish': 'ELA-EDUSECONDARY',
+            'Education AA - Childhood Education': 'ELA-EDUCHILD',
+            'Education AA - Early Childhood Education': 'ELA-EDUEARLYCHILD',
             'Social Science and Hum AA - International': 'ELA-INTN',
             'Social Science and Hum AA - Japanese': 'ELA-JAPAN',
             'Social Science and Hum AA - Latin Amer Stud': 'ELA-LATAM',
@@ -1574,6 +1666,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
             'Communication Studies AA - Digital Comm & Society': 'HUM-COMM',
             'Communication Studies AA - Pub Relations Strategic Comm': 'HUM-COMM',
             'Communication Studies AA - Public Relations': 'HUM-COMM',
+            'Communication Studies AA - Mass Communication': 'HUM-COMM',
             'Communication Studies AA - Speech Pathology': 'HUM-COMMSPEECH',
             'Film and Television AA': 'HUM-FILM',
             'Fine Arts AS': 'HUM-FINEART',
@@ -2524,27 +2617,47 @@ analytics.advising = {
 
         function calculateAcademicDepartmentAnalytics(data) {
             const departmentCounts = {};
+            // dept -> { majorName -> { count, deptSub } } so the dashboard can show which
+            // majors contribute to each department total without re-scanning all records.
+            const departmentMajors = {};
+            const unmappedMajorCounts = {};
             let studentsWithNoMajor = 0;
             let studentsWithMajorButNoDept = 0;
-            
+
             data.forEach(record => {
                 const major = record[CONSTANTS.COLUMNS.Major];
                 const department = record[CONSTANTS.COLUMNS.STUDENT_DEPT];
-                
+                const deptSub = record[CONSTANTS.COLUMNS.STUDENT_DEPT_SUB];
+
                 if (!major || major.trim() === '') {
                     studentsWithNoMajor++;
                 } else if (!department || department.trim() === '') {
                     studentsWithMajorButNoDept++;
+                    const key = major.trim();
+                    unmappedMajorCounts[key] = (unmappedMajorCounts[key] || 0) + 1;
                 } else {
                     if (!departmentCounts[department]) {
                         departmentCounts[department] = 0;
+                        departmentMajors[department] = {};
                     }
                     departmentCounts[department]++;
+
+                    const majorKey = major.trim();
+                    if (!departmentMajors[department][majorKey]) {
+                        departmentMajors[department][majorKey] = { count: 0, deptSub: '' };
+                    }
+                    departmentMajors[department][majorKey].count++;
+                    // A major maps to exactly one sub-department, so first non-empty wins.
+                    if (!departmentMajors[department][majorKey].deptSub && deptSub && deptSub.trim()) {
+                        departmentMajors[department][majorKey].deptSub = deptSub.trim();
+                    }
                 }
             });
-            
+
             return {
                 departmentCounts,
+                departmentMajors,
+                unmappedMajorCounts,
                 studentsWithNoMajor,
                 studentsWithMajorButNoDept,
                 totalStudents: data.length
@@ -3482,7 +3595,7 @@ return html;
         
 function generateAcademicDepartmentDashboard(analytics, totalRecords) {
     if (!analytics) return '<p>No academic department data available.</p>';
-    const { departmentCounts, studentsWithNoMajor, studentsWithMajorButNoDept } = analytics;
+    const { departmentCounts, departmentMajors = {}, studentsWithNoMajor, studentsWithMajorButNoDept } = analytics;
 
     const studentsWithDepartments = Object.values(departmentCounts).reduce((sum, c) => sum + c, 0);
     const studentsWithoutDepartments = studentsWithNoMajor + studentsWithMajorButNoDept;
@@ -3513,74 +3626,130 @@ function generateAcademicDepartmentDashboard(analytics, totalRecords) {
       </div>
     </div>`;
 
-    // Table
-    const headers = [
-        { title: 'Academic Department', align: 'left' },
-        { title: 'Student Count', align: 'right' },
-        { title: 'Percentage', align: 'right' }
-    ];
-    const rows = [];
-
+    // Collapsible department rows. Each header is a button that toggles a nested
+    // table of the majors contributing to that department's total. Percentages
+    // inside a department are OF THE DEPARTMENT (so they sum to 100% within it),
+    // while the department percentage is of all students - these two are
+    // deliberately different denominators.
     if (distinctDepartments > 0) {
-        rows.push({ cells: [{ content: 'Students with Academic Department', style: 'background-color:#e7f3ff;font-weight:bold;', colspan:3 }] });
-        // Sort ALPHABETICALLY
-        const sortedDepartments = Object.entries(departmentCounts)
-            .sort(([a],[b]) => a.localeCompare(b));
-        sortedDepartments.forEach(([dept, count]) => {
-            const pct = ((count/totalRecords)*100).toFixed(1);
-            rows.push({
-                cells:[
-                    { content: dept, style:'font-weight:600;' },
-                    { content: count, style:'text-align:right;color:#28a745;font-weight:bold;' },
-                    { content: `${pct}%`, style:'text-align:right;' }
-                ]
-            });
-        });
-    }
+        html += '<div style="background:#e7f3ff;padding:8px 12px;font-weight:bold;border:1px solid #b8daf5;border-radius:6px 6px 0 0;">Students with Academic Department</div>';
+        html += '<div style="border:1px solid #b8daf5;border-top:none;border-radius:0 0 6px 6px;padding:8px;margin-bottom:16px;">';
 
-    if (studentsWithoutDepartments > 0) {
-        rows.push({ cells: [{ content: '⚠️ Students without Academic Department', style: 'background-color:#fff3cd;font-weight:bold;', colspan:3 }] });
-        if (studentsWithNoMajor > 0) {
-            const pct = ((studentsWithNoMajor/totalRecords)*100).toFixed(1);
-            rows.push({
-                style:'background-color:#fffbf0;',
-                cells:[
-                    { content:'No Major Listed', style:'color:#856404;font-style:italic;' },
-                    { content:studentsWithNoMajor, style:'text-align:right;color:#856404;font-weight:bold;' },
-                    { content:`${pct}%`, style:'text-align:right;color:#856404;' }
-                ]
-            });
-        }
-        if (studentsWithMajorButNoDept > 0) {
-            const pct = ((studentsWithMajorButNoDept/totalRecords)*100).toFixed(1);
-            rows.push({
-                style:'background-color:#f8d7da;',
-                cells:[
-                    { content:'Major Listed but No Department Mapping', style:'color:#721c24;font-style:italic;' },
-                    { content:studentsWithMajorButNoDept, style:'text-align:right;color:#721c24;font-weight:bold;' },
-                    { content:`${pct}%`, style:'text-align:right;color:#721c24;' }
-                ]
-            });
-        }
-    }
+        html += '<div style="display:flex;padding:6px 12px;font-size:11px;font-weight:700;color:#6c757d;text-transform:uppercase;letter-spacing:0.4px;">';
+        html += '<span style="flex:1;">Academic Department</span>';
+        html += '<span style="width:110px;text-align:right;">Students</span>';
+        html += '<span style="width:90px;text-align:right;">% of Total</span>';
+        html += '<span style="width:22px;"></span>';
+        html += '</div>';
 
-    html += utils.createTable(headers, rows, {
-        grandTotal: {
-            color: '#333',
-            cells: [
-                { content: 'GRAND TOTAL' },
-                { content: totalRecords, align: 'right' },
-                { content: '100.0%', align: 'right' }
-            ]
-        }
-    });
+        Object.entries(departmentCounts)
+            .sort(([a],[b]) => a.localeCompare(b))
+            .forEach(([dept, count]) => {
+                const pct = ((count/totalRecords)*100).toFixed(1);
+                const majors = departmentMajors[dept] || {};
+                const majorEntries = Object.entries(majors).sort((a,b) => b[1].count - a[1].count);
+                // Sanitize the department name for use in an element id.
+                const safeId = dept.replace(/[^A-Za-z0-9]/g, '_');
 
-    if (studentsWithMajorButNoDept > 0) {
-        html += '<div style="margin-top:20px;padding:15px;background-color:#fff3cd;border:1px solid #ffeaa7;border-radius:5px;">';
-        html += '<h5 style="margin-top:0;color:#856404;">📋 Students with Majors but No Department Mapping</h5>';
-        html += '<p style="margin:0;color:#721c24;">These students have a major but could not be mapped to a department; review mappings for new or variant majors.</p>';
+                html += '<div style="margin-bottom:4px;border:1px solid #dee2e6;border-radius:5px;overflow:hidden;">';
+                html += `<button onclick="toggleAcademicDept('${safeId}')" style="display:flex;align-items:center;width:100%;padding:9px 12px;background:#f8f9fa;border:none;cursor:pointer;font-size:13px;text-align:left;">`;
+                html += `<span style="flex:1;font-weight:600;color:#212529;">${dept} <span style="font-weight:400;color:#6c757d;font-size:12px;">(${majorEntries.length} major${majorEntries.length === 1 ? '' : 's'})</span></span>`;
+                html += `<span style="width:110px;text-align:right;color:#28a745;font-weight:700;">${count}</span>`;
+                html += `<span style="width:90px;text-align:right;color:#495057;">${pct}%</span>`;
+                html += `<span id="acadDeptArrow_${safeId}" style="width:22px;text-align:right;font-size:10px;color:#6c757d;transition:transform 0.25s ease;">▼</span>`;
+                html += '</button>';
+
+                html += `<div id="acadDeptBody_${safeId}" style="display:none;border-top:1px solid #dee2e6;background:#fff;">`;
+                if (majorEntries.length > 0) {
+                    html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+                    html += '<thead><tr style="background:#f1f3f5;">';
+                    html += '<th style="text-align:left;padding:6px 12px;color:#495057;font-weight:600;">Major</th>';
+                    html += '<th style="text-align:left;padding:6px 10px;color:#495057;font-weight:600;">Sub-Department</th>';
+                    html += '<th style="text-align:right;padding:6px 10px;color:#495057;font-weight:600;">Students</th>';
+                    html += '<th style="text-align:right;padding:6px 12px;color:#495057;font-weight:600;">% of Dept</th>';
+                    html += '</tr></thead><tbody>';
+                    majorEntries.forEach(([majorName, info], i) => {
+                        const mPct = count > 0 ? ((info.count/count)*100).toFixed(1) : '0.0';
+                        const bg = i % 2 === 0 ? '#ffffff' : '#fafbfc';
+                        html += `<tr style="background:${bg};">`;
+                        html += `<td style="padding:5px 12px;border-top:1px solid #f1f3f5;color:#212529;">${majorName}</td>`;
+                        html += `<td style="padding:5px 10px;border-top:1px solid #f1f3f5;color:#6c757d;font-family:monospace;">${info.deptSub || '—'}</td>`;
+                        html += `<td style="padding:5px 10px;border-top:1px solid #f1f3f5;text-align:right;color:#28a745;font-weight:600;">${info.count}</td>`;
+                        html += `<td style="padding:5px 12px;border-top:1px solid #f1f3f5;text-align:right;color:#495057;">${mPct}%</td>`;
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+                } else {
+                    html += '<p style="margin:0;padding:10px 12px;color:#6c757d;font-size:12px;font-style:italic;">No major detail available.</p>';
+                }
+                html += '</div>';
+                html += '</div>';
+            });
+
         html += '</div>';
     }
+
+    // Students without a department. The unmapped-major row is expandable inline so
+    // the major names sit directly under the count that prompted the question.
+    // Earlier versions rendered the names in a separate panel further down the page,
+    // which was easy to miss entirely when the count was small (e.g. a single student).
+    if (studentsWithoutDepartments > 0) {
+        const unmapped = Object.entries(analytics.unmappedMajorCounts || {}).sort((a,b) => b[1] - a[1]);
+
+        html += '<div style="background:#fff3cd;padding:8px 12px;font-weight:bold;color:#856404;border:1px solid #ffeaa7;border-radius:6px 6px 0 0;">⚠️ Students without Academic Department</div>';
+        html += '<div style="border:1px solid #ffeaa7;border-top:none;border-radius:0 0 6px 6px;padding:8px;margin-bottom:16px;">';
+
+        if (studentsWithNoMajor > 0) {
+            const pct = ((studentsWithNoMajor/totalRecords)*100).toFixed(1);
+            // Not expandable: these students have no "Major:" entry in the Category
+            // field at all, so there is no major name to reveal.
+            html += '<div style="display:flex;align-items:center;padding:9px 12px;background:#fffbf0;border:1px solid #ffeaa7;border-radius:5px;margin-bottom:4px;font-size:13px;">';
+            html += '<span style="flex:1;color:#856404;font-style:italic;">No Major Listed <span style="font-style:normal;font-size:11px;color:#a08050;">(no "Major:" entry in Category)</span></span>';
+            html += `<span style="width:110px;text-align:right;color:#856404;font-weight:700;">${studentsWithNoMajor}</span>`;
+            html += `<span style="width:90px;text-align:right;color:#856404;">${pct}%</span>`;
+            html += '<span style="width:22px;"></span>';
+            html += '</div>';
+        }
+
+        if (studentsWithMajorButNoDept > 0) {
+            const pct = ((studentsWithMajorButNoDept/totalRecords)*100).toFixed(1);
+            html += '<div style="border:1px solid #f5c2c7;border-radius:5px;overflow:hidden;">';
+            html += `<button onclick="toggleAcademicDept('UNMAPPED')" style="display:flex;align-items:center;width:100%;padding:9px 12px;background:#f8d7da;border:none;cursor:pointer;font-size:13px;text-align:left;">`;
+            html += `<span style="flex:1;color:#721c24;font-style:italic;">Major Listed but No Department Mapping <span style="font-style:normal;font-weight:600;">(${unmapped.length} major${unmapped.length === 1 ? '' : 's'})</span></span>`;
+            html += `<span style="width:110px;text-align:right;color:#721c24;font-weight:700;">${studentsWithMajorButNoDept}</span>`;
+            html += `<span style="width:90px;text-align:right;color:#721c24;">${pct}%</span>`;
+            html += `<span id="acadDeptArrow_UNMAPPED" style="width:22px;text-align:right;font-size:10px;color:#721c24;transition:transform 0.25s ease;">▼</span>`;
+            html += '</button>';
+            html += '<div id="acadDeptBody_UNMAPPED" style="display:none;border-top:1px solid #f5c2c7;background:#fff;">';
+            if (unmapped.length > 0) {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+                html += '<thead><tr style="background:#fdf0f1;">';
+                html += '<th style="text-align:left;padding:6px 12px;color:#721c24;font-weight:600;">Unmapped Major</th>';
+                html += '<th style="text-align:right;padding:6px 12px;color:#721c24;font-weight:600;">Students</th>';
+                html += '</tr></thead><tbody>';
+                unmapped.forEach(([majorName, cnt], i) => {
+                    const bg = i % 2 === 0 ? '#ffffff' : '#fffafa';
+                    html += `<tr style="background:${bg};">`;
+                    html += `<td style="padding:5px 12px;border-top:1px solid #fdf0f1;color:#212529;">${majorName}</td>`;
+                    html += `<td style="padding:5px 12px;border-top:1px solid #fdf0f1;text-align:right;color:#721c24;font-weight:600;">${cnt}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                html += '<p style="margin:0;padding:8px 12px;border-top:1px solid #fdf0f1;font-size:11px;color:#6c757d;">Add these to departmentMappings and majorToStudentDeptSubMappings to resolve.</p>';
+            }
+            html += '</div>';
+            html += '</div>';
+        }
+
+        html += '</div>';
+    }
+
+    html += `<div style="margin-top:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;display:flex;align-items:center;">
+        <span style="flex:1;font-weight:700;color:#333;">GRAND TOTAL</span>
+        <span style="width:110px;text-align:right;font-weight:700;color:#333;">${totalRecords}</span>
+        <span style="width:90px;text-align:right;font-weight:700;color:#333;">100.0%</span>
+        <span style="width:22px;"></span>
+    </div>`;
 
     return html;
 }
@@ -4228,6 +4397,15 @@ function generatePeerDashboard(analytics, totalRecords) {
                 .map(g => ({ ...g, items: buckets.get(g.key).sort((a, b) => a[0].localeCompare(b[0])) }))
                 .filter(g => g.items.length > 0);
         }
+
+        window.toggleAcademicDept = function(safeId) {
+            const body = document.getElementById('acadDeptBody_' + safeId);
+            const arrow = document.getElementById('acadDeptArrow_' + safeId);
+            if (!body || !arrow) return;
+            const isOpen = body.style.display !== 'none';
+            body.style.display = isOpen ? 'none' : 'block';
+            arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+        };
 
         window.toggleCategoryGroup = function(key) {
             const body = document.getElementById('catGroupBody_' + key);
