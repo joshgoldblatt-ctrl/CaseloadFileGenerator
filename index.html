@@ -1,12 +1,16 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.10
+  Version:      3.9.11
   Released:     September 14, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.11  2026-09-14
+    - Sub-department codes renamed: MEC-COMP -> MEC-COMPSCI,
+      MEC-ENG -> MEC-ENGINEER.
+
   v3.9.10  2026-09-14
     - Category Manager: the per-group "N selected" pill now refreshes on
       Select All / Deselect All / Select Only Featured / Select Only Common
@@ -369,7 +373,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.10</title>
+    <title>Navigate Caseload File Generator v3.9.11</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -541,7 +545,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.10 - Released September 14, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.11 - Released September 14, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -550,6 +554,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.11</span>
+                        <span style="font-size:12px; color:#6c757d;">September 14, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Sub-department codes renamed:</strong> MEC-COMP is now MEC-COMPSCI and MEC-ENG is now MEC-ENGINEER.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1755,26 +1769,26 @@ function toAdvisingOfficeFromRole(roleLabel) {
             'Social Science and Hum AA': 'LIBARTS-SSH',
             'Social Science and Hum AA - General': 'LIBARTS-SSH',
             'Social Science and Hum AA - Women': 'LIBARTS-WGS',
-            'Cybersecurity AAS': 'MEC-COMP',
-            'Cybersecurity AAS - General': 'MEC-COMP',
-            'Cybersecurity AAS - Online': 'MEC-COMP',
-            'Cybersecurity CERT': 'MEC-COMP',
-            'Computer Science AS': 'MEC-COMP',
-            'Computer Technology AAS': 'MEC-COMP',
-            'Computer Technology AAS - Telecommunication Option': 'MEC-COMP',
-            'Network & Info Sec CERT': 'MEC-COMP',
-            'Network Admin & Info Sec AAS': 'MEC-COMP',
-            'Network Admin & Info Sec AAS - Network Admin & Secur Opt': 'MEC-COMP',
-            'Programming/Software Dev AAS': 'MEC-COMP',
-            'Programming/Software Dev AAS - Web Programming': 'MEC-COMP',
-            'Electrical Engineering AS': 'MEC-ENG',
-            'Energy Technician AAS': 'MEC-ENG',
-            'Energy Technician AAS - Electrical': 'MEC-ENG',
-            'Energy Technician AAS - Mechanical': 'MEC-ENG',
-            'Engineering Sci Civil Eng AS': 'MEC-ENG',
-            'Mechanical Engineering AS': 'MEC-ENG',
-            'Mechanical Engineering AS - Earth Sys Sci and Envrnmtl Eng': 'MEC-ENG',
-            'Mechanical Engineering AS - General': 'MEC-ENG',
+            'Cybersecurity AAS': 'MEC-COMPSCI',
+            'Cybersecurity AAS - General': 'MEC-COMPSCI',
+            'Cybersecurity AAS - Online': 'MEC-COMPSCI',
+            'Cybersecurity CERT': 'MEC-COMPSCI',
+            'Computer Science AS': 'MEC-COMPSCI',
+            'Computer Technology AAS': 'MEC-COMPSCI',
+            'Computer Technology AAS - Telecommunication Option': 'MEC-COMPSCI',
+            'Network & Info Sec CERT': 'MEC-COMPSCI',
+            'Network Admin & Info Sec AAS': 'MEC-COMPSCI',
+            'Network Admin & Info Sec AAS - Network Admin & Secur Opt': 'MEC-COMPSCI',
+            'Programming/Software Dev AAS': 'MEC-COMPSCI',
+            'Programming/Software Dev AAS - Web Programming': 'MEC-COMPSCI',
+            'Electrical Engineering AS': 'MEC-ENGINEER',
+            'Energy Technician AAS': 'MEC-ENGINEER',
+            'Energy Technician AAS - Electrical': 'MEC-ENGINEER',
+            'Energy Technician AAS - Mechanical': 'MEC-ENGINEER',
+            'Engineering Sci Civil Eng AS': 'MEC-ENGINEER',
+            'Mechanical Engineering AS': 'MEC-ENGINEER',
+            'Mechanical Engineering AS - Earth Sys Sci and Envrnmtl Eng': 'MEC-ENGINEER',
+            'Mechanical Engineering AS - General': 'MEC-ENGINEER',
             'Biology AS': 'NAS-BIO',
             'Biology AS - Biotechnology': 'NAS-BIO',
             'Biology AS - General Biology': 'NAS-BIO',
