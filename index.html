@@ -1,12 +1,109 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.11
-  Released:     September 14, 2026
+  Version:      3.9.14
+  Released:     September 18, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.14  2026-09-18
+    - Advising Office entries within a row are now in a canonical alphabetical
+      order. Navigate emits role tags in an arbitrary order, so the same pair of
+      offices appeared both ways across students ("ASAP; Careers in Engineering"
+      34x and "Careers in Engineering; ASAP" 30x in the SP26 June file; 105 of the
+      184 multi-office rows were non-alphabetical).
+    - Implementation: in extractProfessionalAdvisorAndOffice, after the existing
+      dedup step, the advisor+office PAIRS are sorted together by office name with
+      advisor name as tiebreak (sortPairs). The office list is never sorted on its
+      own - that would break the positional pairing with Professional Advisor and
+      Staff ID that the Metrics App depends on. Staff ID follows automatically
+      because performLookups derives it from the advisor-name order.
+    - Health Sciences is appended AFTER this sort (in the record block), so it
+      remains the last entry regardless of alphabetical position.
+    - Same sort applied to the Secondary columns (3 multi-office rows in SP26).
+    - Dashboard counts are unaffected: the office distribution already sorted
+      unique offices before keying, so it was order-blind. Student 24210701 is
+      unchanged ("ASAP; ASAP" <-> "Pritchard, Annabella; Sanchez, Lucila") because
+      the advisor tiebreak matches the original order.
+
+  v3.9.13  2026-09-18
+    - Paramedic advising is now a PRIMARY office named "Paramedic" (was the
+      SECONDARY office "Health Sciences/Paramedic"). Both role strings, "Paramedic
+      Advisor" and "Academic Advisor - Paramedic Program", moved from
+      ROLES.SECONDARY_ADVISOR to ROLES.ADVISOR, and ROLE_TO_OFFICE now maps them to
+      "Paramedic". Effects: the paramedic advisor's name lands in Professional
+      Advisor with "Paramedic" at the same index in Advising Office and the
+      advisor's ID in Staff ID; the Secondary columns no longer carry Paramedic;
+      "Paramedic" appears in the office distribution, median caseload and advisor
+      assignment tables; and the paramedic advisor is now subject to the primary
+      advisor staff-file mismatch check (previously exempt as a secondary role).
+      SP26 June file: 34 students, one advisor, 8 of whom also carry another
+      primary office and so become shared students.
+    - Health Sciences placeholder for positional pairing. In v3.9.12 a clinical
+      student with no professional advisor exported Advising Office = "Health
+      Sciences" against an EMPTY Professional Advisor and Staff ID, and a clinical
+      student with one advisor exported 2 offices against 1 advisor. Any consumer
+      that zips the three columns by index would mis-pair. The record block now
+      appends CONSTANTS.PLACEHOLDERS.ADVISOR ("Health Sciences (no advisor)") to
+      Professional Advisor at the Health Sciences index, and performLookups emits
+      CONSTANTS.PLACEHOLDERS.STAFF_ID ("N/A") at that same index in Staff ID. All
+      three columns now have identical entry counts on every row.
+    - Every consumer of the Professional Advisor column was audited and made
+      placeholder-aware: performLookups (emits N/A instead of dropping it), the
+      office-analytics advisor count (excluded, so the "No Professional Advisor"
+      dashboard row from v3.9.12 still reports the true count), and the data
+      quality advisorsInCaseload set (excluded, so the placeholder never appears in
+      "Primary Advisors in Caseload but NOT in Staff File"). The median caseload and
+      advisor assignment tables derive from Assigned Staff roles and never see it.
+    - Placeholder strings live in CONSTANTS.PLACEHOLDERS so a future rename is one
+      edit; nothing else in the file hard-codes them.
+
+  v3.9.12  2026-09-18
+    - Clinical advising now lands in the Advising Office column. Students enrolled
+      in a clinical course for the selected semester get "Health Sciences" APPENDED
+      as the last office (e.g. "ASAP; Health Sciences"). Append-only is deliberate:
+      Advising Office is positionally paired with Professional Advisor and Staff ID
+      by the Metrics App, so the clinical entry must never displace a professional
+      advisor's office. advisingOffice remains offices.join('; ') with no Set
+      collapse (the v3.9.11 alignment fix is preserved).
+    - Clinical detection is now TERM-SPECIFIC. The old check was a term-agnostic
+      substring, category.toLowerCase().includes('enrolled in any clinical course'),
+      which over-counts because a raw export can carry both Spring and Fall flags on
+      one student (SP26 file: 700 substring hits vs 616 exact Spring matches). The
+      new check builds the exact Category entry from the semester picker via
+      clinicalCategoryEntry(): "Spring 2026" -> "Enrolled in any Clinical Course -
+      2026 Spring Term", then does an exact compare against each comma-separated
+      Category item. It reads the same value that stamps the Semester column, so
+      the two cannot disagree. CLINICAL_TERM_ALIASES is an empty hook for any
+      future export whose term label deviates from "<YYYY> <Season> Term".
+    - Zero-match safeguard: if no records match the constructed entry, a warning
+      names the entry and points at the semester picker / raw Category data,
+      instead of silently emitting a file with no Health Sciences assignments.
+    - Removed the "Other Advising" output column and its builder. Audit of its
+      consumers: the Nondegree/Permit flags were built only there (no other reader;
+      no longer needed once the raw file is limited to official students); the
+      "Enrolled in Clinical" flag is superseded by the office assignment above.
+      Removed from CONSTANTS.COLUMNS and from the export desiredOrder.
+    - Removed noOfficeBreakdown.clinicalCourse and its dashboard row. Clinical
+      students now always carry an office, so that row could never be non-zero.
+    - Single Office breakdown gained a third row, "No Professional Advisor (Health
+      Sciences only)". A student with one office and zero advisors previously fell
+      into neither the Single Advisor nor Multiple Advisors bucket - a latent gap
+      that this change would have turned into ~537 silently missing students in
+      SP26. The three sub-rows now sum to the single-office total.
+    - Unchanged by design: professional-office parsing from role tags, Secondary
+      Advising Office handling, department/major mapping, the Category Manager's
+      featured prefix "Enrolled in any Clinical Course - " (that list is unrelated
+      to Other Advising), and the rest of the output shape.
+    - SP26 validation (file on hand, 2026-08-03 pull): 616 students with Health
+      Sciences in Advising Office, 79 of them also carrying a professional office,
+      537 Health Sciences alone; zero rows where Professional Advisor has more
+      entries than Advising Office; student 24210701 unchanged at
+      "ASAP; ASAP" <-> "Pritchard, Annabella; Sanchez, Lucila". The request's
+      targets (~585 / ~170) came from a different pull and are pending
+      re-validation against that file.
+
   v3.9.11  2026-09-14
     - Sub-department codes renamed: MEC-COMP -> MEC-COMPSCI,
       MEC-ENG -> MEC-ENGINEER.
@@ -373,7 +470,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.11</title>
+    <title>Navigate Caseload File Generator v3.9.14</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -545,7 +642,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.11 - Released September 14, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.14 - Released September 18, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -554,6 +651,40 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.14</span>
+                        <span style="font-size:12px; color:#6c757d;">September 18, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Consistent office order:</strong> Multiple offices on one row now always appear alphabetically (e.g. always "ASAP; Careers in Engineering", never the reverse). The advisor and Staff ID entries move with their office, so positional pairing is preserved. Health Sciences still appears last.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.13</span>
+                        <span style="font-size:12px; color:#6c757d;">September 18, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Paramedic is now a primary office:</strong> Renamed from "Health Sciences/Paramedic" to <em>Paramedic</em> and moved from the Secondary columns into Professional Advisor / Advising Office / Staff ID, alongside the other primary advising offices.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Aligned placeholders for Health Sciences:</strong> Where a clinical student has "Health Sciences" in Advising Office, Professional Advisor now carries <em>Health Sciences (no advisor)</em> and Staff ID carries <em>N/A</em> at the same position, so the three columns always have the same number of entries. Placeholders are excluded from advisor counts and the staff-file mismatch check.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.12</span>
+                        <span style="font-size:12px; color:#6c757d;">September 18, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Clinical advising in Advising Office:</strong> Students enrolled in a clinical course for the selected semester now get <em>Health Sciences</em> appended as the last office (e.g. "ASAP; Health Sciences"), keeping professional advisors aligned with their own offices.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Term-specific clinical match:</strong> The check now matches the exact entry for the selected semester (e.g. "Enrolled in any Clinical Course - 2026 Spring Term") instead of any clinical flag, so students carrying only a different term's flag are no longer counted. A warning appears if zero students match.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Other Advising column removed</strong> from the export, along with the Nondegree/Permit flags it carried.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Dashboard:</strong> Single Office breakdown now shows a "No Professional Advisor (Health Sciences only)" row so the sub-rows sum to the total; the "Enrolled in any Clinical Course" row under no-office students was removed since it can no longer occur.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1005,8 +1136,8 @@
     'eci - middle college hs advisor': 'ECI - Middle College HS',
     'cuny start advisor': 'CUNY Start',
     'math start advisor': 'Math Start',
-    'paramedic advisor': 'Health Sciences/Paramedic',
-    'academic advisor - paramedic program': 'Health Sciences/Paramedic',
+    'paramedic advisor': 'Paramedic',
+    'academic advisor - paramedic program': 'Paramedic',
     'cuny edge advisor': 'CUNY Edge',
     'athletics advisor': 'Athletics'
   },
@@ -1018,6 +1149,7 @@ ROLES: {
                          'careers in engineering advisor', 'academic advisor - careers in engineering',
                          'cuny 2x tech computer science advisor', 'academic advisor - cuny 2x tech academy',
                          'academic advisor - cybersecurity online program',
+                         'paramedic advisor', 'academic advisor - paramedic program',
                          'veteran services advisor', 'veterans services advisor', 'academic advisor - veterans services'],
                 SECONDARY_ADVISOR: [
                     'eci - college now advisor',
@@ -1026,8 +1158,6 @@ ROLES: {
                     'eci - middle college hs advisor',
                     'cuny start advisor',
                     'math start advisor',
-                    'paramedic advisor',
-                    'academic advisor - paramedic program',
                     'cuny edge advisor',
                     'athletics advisor'
                 ],
@@ -1036,6 +1166,13 @@ ROLES: {
                 PEER: ['peer advisor'],
                 PROGRAM_DIRECTOR: ['program director'],
                 LIBRARIAN: ['librarian']
+            },
+            // Placeholders written at the Health Sciences position so Professional
+            // Advisor, Staff ID and Advising Office stay equal-length for positional
+            // pairing downstream. Every consumer of the advisor column must skip these.
+            PLACEHOLDERS: {
+                ADVISOR: 'Health Sciences (no advisor)',
+                STAFF_ID: 'N/A'
             },
             COLUMNS: {
                 STUDENT_ID: 'Student ID',
@@ -1046,7 +1183,6 @@ ROLES: {
                 SECONDARY_PROFESSIONAL_ADVISOR: 'Secondary Professional Advisor',
                 SECONDARY_ADVISING_OFFICE: 'Secondary Advising Office',
                 SECONDARY_STAFF_ID: 'Secondary Staff ID',
-                OTHER_ADVISING: 'Other Advising',
                 FACULTY_MENTOR: 'Faculty Mentor',
                 PEER_ADVISOR: 'Peer Advisor',
                 PROGRAM_DIRECTOR: 'Program Director',
@@ -1126,6 +1262,19 @@ function toAdvisingOfficeFromRole(roleLabel) {
         function getSelectedSemester() {
             const year = document.getElementById('semesterYear').value;
             return selectedTerm + ' ' + year;
+        }
+
+        // Builds the exact Category entry that marks clinical enrollment for the
+        // selected semester. "Spring 2026" -> "Enrolled in any Clinical Course - 2026 Spring Term".
+        // Derived from the same value that stamps the Semester column, so the two
+        // can never disagree. If a future raw export labels a term differently,
+        // add an alias to CLINICAL_TERM_ALIASES keyed by the "Season YYYY" string.
+        const CLINICAL_TERM_ALIASES = {};
+        function clinicalCategoryEntry(semester) {
+            if (CLINICAL_TERM_ALIASES[semester]) return CLINICAL_TERM_ALIASES[semester];
+            const m = (semester || '').match(/^(Fall|Spring)\s+(\d{4})$/);
+            if (!m) return null;
+            return `Enrolled in any Clinical Course - ${m[2]} ${m[1]} Term`;
         }
 
         // CHANGELOG TOGGLE
@@ -1578,6 +1727,21 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     }
                     secondaryAdvisors = dedupedSecAdvisors;
                     secondaryOffices = dedupedSecOffices;
+
+                    // Canonical ordering. Navigate emits role tags in an arbitrary order, so
+                    // the same two offices came out as both "ASAP; Careers in Engineering"
+                    // and "Careers in Engineering; ASAP". Sort the advisor+office PAIRS
+                    // together (never the office list alone) by office, then advisor, so
+                    // positional alignment with Professional Advisor / Staff ID survives.
+                    // Health Sciences is appended after this step and therefore stays last.
+                    const sortPairs = (advList, offList) => {
+                        const idx = advList.map((_, i) => i);
+                        idx.sort((a, b) =>
+                            offList[a].localeCompare(offList[b]) || advList[a].localeCompare(advList[b]));
+                        return [idx.map(i => advList[i]), idx.map(i => offList[i])];
+                    };
+                    [advisors, offices] = sortPairs(advisors, offices);
+                    [secondaryAdvisors, secondaryOffices] = sortPairs(secondaryAdvisors, secondaryOffices);
                 } catch (e) {
                     console.warn('Advisor dedup failed:', e);
                 }
@@ -1940,52 +2104,43 @@ function toAdvisingOfficeFromRole(roleLabel) {
 
                     utils.updateProgress(35, 'Extracting staff assignments...', 'Processing advisor, faculty, and peer assignments');
                     
+                    // Clinical enrollment is matched on the EXACT term-specific Category entry
+                    // for the selected semester. The raw file can carry both Spring and Fall
+                    // flags on one student, so a term-agnostic substring match over-counts.
+                    const clinicalEntry = clinicalCategoryEntry(semester);
+                    let clinicalMatchCount = 0;
+
                     records = records.map(record => {
                         const advisorInfo = utils.extractProfessionalAdvisorAndOffice(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '');
-                        record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR] = advisorInfo.professionalAdvisor;
-                        
-                        // Primary advising office - just from Assigned Staff roles (no special values)
-                        record[CONSTANTS.COLUMNS.ADVISING_OFFICE] = advisorInfo.advisingOffice;
+                        let professionalAdvisor = advisorInfo.professionalAdvisor;
+
+                        // Primary advising office from Assigned Staff roles. advisingOffice is
+                        // offices.join('; ') with NO de-duplication, so it stays positionally
+                        // paired with Professional Advisor / Staff ID for the Metrics App.
+                        let advisingOffice = advisorInfo.advisingOffice;
+
+                        // Clinical students get "Health Sciences" APPENDED as the last office,
+                        // with a matching placeholder appended to Professional Advisor at the
+                        // same index (Staff ID gets its placeholder in performLookups). Appending,
+                        // never prepending, keeps every professional advisor aligned with its
+                        // own office. Category entries contain no commas, so a split on ','
+                        // followed by an exact compare is safe.
+                        const category = record[CONSTANTS.COLUMNS.CATEGORY] || '';
+                        if (clinicalEntry) {
+                            const isClinical = category.split(',').some(c => c.trim() === clinicalEntry);
+                            if (isClinical) {
+                                clinicalMatchCount++;
+                                const ph = CONSTANTS.PLACEHOLDERS.ADVISOR;
+                                advisingOffice = advisingOffice ? `${advisingOffice}; Health Sciences` : 'Health Sciences';
+                                professionalAdvisor = professionalAdvisor ? `${professionalAdvisor}; ${ph}` : ph;
+                            }
+                        }
+                        record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR] = professionalAdvisor;
+                        record[CONSTANTS.COLUMNS.ADVISING_OFFICE] = advisingOffice;
                         
                         // Secondary advising columns
                         record[CONSTANTS.COLUMNS.SECONDARY_PROFESSIONAL_ADVISOR] = advisorInfo.secondaryProfessionalAdvisor;
                         record[CONSTANTS.COLUMNS.SECONDARY_ADVISING_OFFICE] = advisorInfo.secondaryAdvisingOffice;
-                        
-                        // Check Degree column for "NA" -> add "Nondegree"
-                        const degree = record['Degree'] || '';
-                        // Check the raw Major column (which is mapped to NAV_M/Navigate Major)
-                        const rawMajor = record[CONSTANTS.COLUMNS.NAV_M] || '';
-                        // Check Category for clinical course enrollment
-                        const category = record[CONSTANTS.COLUMNS.CATEGORY] || '';
-                        
-                        // Determine Other Advising designations
-                        let addNondegree = false;
-                        let addPermit = false;
-                        let addClinical = false;
-                        
-                        if (degree.trim().toUpperCase() === 'NA') {
-                            addNondegree = true;
-                        }
-                        
-                        // Check raw Major column (NAV_M) for special values
-                        if (rawMajor.includes('Non Degree Undergraduate')) {
-                            addNondegree = true;
-                        }
-                        if (rawMajor.includes('CUNY Permit Undergraduate')) {
-                            addPermit = true;
-                        }
-                        
-                        // Check Category for clinical course enrollment
-                        if (category.toLowerCase().includes('enrolled in any clinical course')) {
-                            addClinical = true;
-                        }
-                        
-                        // Build Other Advising column
-                        const otherAdvising = [];
-                        if (addClinical) otherAdvising.push('Enrolled in Clinical');
-                        if (addNondegree) otherAdvising.push('Nondegree');
-                        if (addPermit) otherAdvising.push('Permit');
-                        record[CONSTANTS.COLUMNS.OTHER_ADVISING] = otherAdvising.length > 0 ? otherAdvising.join('; ') : null;
                         
                         const facultyMentor = utils.extractStaffByRole(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '', 'faculty mentor');
                         const clinicalAdvisor = utils.extractStaffByRole(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '', 'clinical health faculty advisor');
@@ -2010,6 +2165,16 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         return record;
                     });
                     
+                    // Safeguard: a semester/file mismatch would otherwise produce a file with
+                    // no Health Sciences assignments and no indication anything was wrong.
+                    if (!clinicalEntry) {
+                        console.warn('Could not build a clinical Category entry from semester:', semester);
+                    } else if (clinicalMatchCount === 0) {
+                        utils.showStatus(`No "${clinicalEntry}" entries found — check the selected semester or the raw file's Category data. No Health Sciences office assignments were made.`, 'warning');
+                    }
+                    appState.clinicalMatchCount = clinicalMatchCount;
+                    appState.clinicalEntry = clinicalEntry;
+
                     utils.updateProgress(60, 'Performing data lookups...', 'Matching staff IDs and department information');
                     
                     records = performLookups(records);
@@ -2141,7 +2306,13 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     if (type === 'advisor') {
                         if (record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR]) {
                             const names = record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR].split(';').map(n => n.trim()).filter(Boolean);
-                            const ids = names.map(name => map[name]?.id).filter(Boolean);
+                            // The Health Sciences placeholder has no staff-file row; emit the
+                            // Staff ID placeholder at that index so the column stays aligned.
+                            // Real advisors missing from the staff file are still dropped
+                            // (pre-existing behavior, surfaced by the data quality report).
+                            const ids = names
+                                .map(name => name === CONSTANTS.PLACEHOLDERS.ADVISOR ? CONSTANTS.PLACEHOLDERS.STAFF_ID : map[name]?.id)
+                                .filter(Boolean);
                             record[config.outputColumn] = ids.length > 0 ? ids.join('; ') : null;
                         }
                         
@@ -2209,7 +2380,6 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 earlyCollege: 0,
                 internationalStudent: 0,
                 asapAccepts: 0,
-                clinicalCourse: 0,
                 other: 0,
                 otherCreditsBreakdown: {
                     null: 0,
@@ -2223,6 +2393,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
             const singleOfficeBreakdown = {
                 singleAdvisor: 0,
                 multipleAdvisors: 0,
+                noAdvisor: 0, // one office but no professional advisor (Health Sciences via clinical enrollment)
                 multipleAdvisorsByOffice: {}, // Track which offices have multiple advisor cases
                 studentDetails: {} // Track which students fall into which category
             };
@@ -2246,13 +2417,21 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     // Check if this is a single office assignment (based on unique offices)
                     if (uniqueOffices.length === 1) {
                         // Count the number of advisors for this single office
-                        const advisorList = advisor ? advisor.split(';').map(a => a.trim()).filter(a => a) : [];
+                        const advisorList = advisor
+                            ? advisor.split(';').map(a => a.trim()).filter(a => a && a !== CONSTANTS.PLACEHOLDERS.ADVISOR)
+                            : [];
                         if (advisorList.length === 1) {
                             singleOfficeBreakdown.singleAdvisor++;
                             if (studentId) singleOfficeBreakdown.studentDetails[studentId] = 'singleAdvisor';
                         } else if (advisorList.length > 1) {
                             singleOfficeBreakdown.multipleAdvisors++;
                             if (studentId) singleOfficeBreakdown.studentDetails[studentId] = 'multipleAdvisors';
+                        } else {
+                            // Office present, no advisor: a clinical student with no
+                            // professional advisor. Previously this case was silently dropped
+                            // from the breakdown, so the sub-rows did not sum to the total.
+                            singleOfficeBreakdown.noAdvisor++;
+                            if (studentId) singleOfficeBreakdown.studentDetails[studentId] = 'noAdvisor';
                             
                             // Track which office this is for
                             if (!singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey]) {
@@ -2285,8 +2464,6 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         noOfficeBreakdown.internationalStudent++;
                     } else if (category.includes('SG:ASP3-Accepts ASAP Invitation')) {
                         noOfficeBreakdown.asapAccepts++;
-                    } else if (category.toLowerCase().includes('enrolled in any clinical course')) {
-                        noOfficeBreakdown.clinicalCourse++;
                     } else {
                         noOfficeBreakdown.other++;
                         
@@ -2314,7 +2491,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                 if (advisor?.trim()) {
                     advisor.split(';').forEach(name => {
                         const trimmedName = name.trim();
-                        if (trimmedName) advisorsInCaseload.add(trimmedName);
+                        if (trimmedName && trimmedName !== CONSTANTS.PLACEHOLDERS.ADVISOR) advisorsInCaseload.add(trimmedName);
                     });
                 }
             });
@@ -3317,7 +3494,8 @@ function generateAdvisingDashboard(analytics, totalRecords) {
         ${analytics.singleOfficeBreakdown ? `
         <div style="font-size:10px; color:#0f6b3a; margin-top:4px; border-top:1px solid #bfe8d0; padding-top:4px;">
           Single Advisor: ${analytics.singleOfficeBreakdown.singleAdvisor}<br>
-          Multiple Advisors: ${analytics.singleOfficeBreakdown.multipleAdvisors}
+          Multiple Advisors: ${analytics.singleOfficeBreakdown.multipleAdvisors}<br>
+          No Professional Advisor: ${analytics.singleOfficeBreakdown.noAdvisor || 0}
         </div>` : ''}
       </div>
       <div style="flex:1 1 220px; background:#fff7e6; border:1px solid #ffe0a6; border-radius:8px; padding:14px;">
@@ -3433,9 +3611,10 @@ function generateAdvisingDashboard(analytics, totalRecords) {
                 
                 if (analytics.singleOfficeBreakdown.multipleAdvisors > 0) {
                     const pct = ((analytics.singleOfficeBreakdown.multipleAdvisors / studentsWithOffice) * 100).toFixed(1);
+                    const multiConnector = (analytics.singleOfficeBreakdown.noAdvisor > 0) ? '├──' : '└──';
                     rows.push({
                         cells: [
-                            { content: '└── Multiple Advisors (same office)', style: 'padding-left: 30px; font-style: italic; color: #495057;' },
+                            { content: `${multiConnector} Multiple Advisors (same office)`, style: 'padding-left: 30px; font-style: italic; color: #495057;' },
                             { content: analytics.singleOfficeBreakdown.multipleAdvisors, style: 'text-align: right; font-style: italic; color: #495057;' },
                             { content: `${pct}%`, style: 'text-align: right; font-style: italic; color: #495057;' }
                         ]
@@ -3461,6 +3640,17 @@ function generateAdvisingDashboard(analytics, totalRecords) {
                     }
                 }
                 
+                if (analytics.singleOfficeBreakdown.noAdvisor > 0) {
+                    const pct = ((analytics.singleOfficeBreakdown.noAdvisor / studentsWithOffice) * 100).toFixed(1);
+                    rows.push({
+                        cells: [
+                            { content: '└── No Professional Advisor (Health Sciences only)', style: 'padding-left: 30px; font-style: italic; color: #495057;' },
+                            { content: analytics.singleOfficeBreakdown.noAdvisor, style: 'text-align: right; font-style: italic; color: #495057;' },
+                            { content: `${pct}%`, style: 'text-align: right; font-style: italic; color: #495057;' }
+                        ]
+                    });
+                }
+
                 // Add a separator row for better visual clarity
                 rows.push({
                     cells: [
@@ -3562,7 +3752,6 @@ function generateAdvisingDashboard(analytics, totalRecords) {
         addBreakdownRow('Early College Initiative Students (SG:ECI)', noOfficeBreakdown.earlyCollege);
         addBreakdownRow('International Students (SG:ISS)', noOfficeBreakdown.internationalStudent);
         addBreakdownRow('ASAP Accepts Students (SG:ASP3)', noOfficeBreakdown.asapAccepts);
-        addBreakdownRow('Enrolled in any Clinical Course', noOfficeBreakdown.clinicalCourse);
 
         if (noOfficeBreakdown.other > 0) {
             const percentage = ((noOfficeBreakdown.other / noOfficeCount) * 100).toFixed(1);
@@ -4963,7 +5152,6 @@ function exportProcessedData() {
         pushIfPresent(desiredOrder, {const:'SECONDARY_ADVISING_OFFICE'});  // Secondary Advising Office
         pushIfPresent(desiredOrder, {const:'SECONDARY_PROFESSIONAL_ADVISOR'}); // Secondary Professional Advisor
         pushIfPresent(desiredOrder, {const:'SECONDARY_STAFF_ID'});         // Secondary Staff ID
-        pushIfPresent(desiredOrder, {const:'OTHER_ADVISING'});             // Other Advising
         pushIfPresent(desiredOrder, 'Degree');                             // Degree
         pushIfPresent(desiredOrder, {const:'NAV_M'});                      // Navigate Major
         pushIfPresent(desiredOrder, {const:'Major'});                      // Major
