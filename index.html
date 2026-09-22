@@ -1,12 +1,33 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.15
+  Version:      3.9.16
   Released:     September 22, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.16  2026-09-22
+    - BUG FIX: the Program Director column has been empty in every export.
+      extractStaffByRole matched the literal tag "(program director)", but Navigate
+      writes every Program Director tag with a program suffix - "(Program Director -
+      Biology)", 44 variants in SP26 - so the substring never occurred. Verified
+      empty in all four finalized metrics files (FA24 / SP25 / FA25 / SP26) despite
+      5,500-6,700 students per term carrying the tag. Long-standing; not a
+      regression from any recent version.
+    - New utils.extractProgramDirectors(): matches the "Program Director - <program>"
+      form and outputs "Name (Program)" per director, joined with "; ". Roughly
+      2,500 SP26 students have two or three directors, so the program is included
+      to keep them distinguishable. The role text can itself contain parentheses
+      ("Program Director - English (General Option)"), so the role is parsed as
+      everything after the first "(" with one trailing ")" stripped, rather than
+      with a non-greedy regex.
+    - The prefix forms "ESL Program Director" and "Honors Program Director" are
+      deliberately NOT captured, per Josh's decision. They remain in Assigned Staff.
+    - extractStaffByRole itself is unchanged; Peer Advisor and Librarian still use
+      it and were never affected (those tags have no suffix).
+    - No dashboard changes; the Program Director column is export-only.
+
   v3.9.15  2026-09-22
     - New export column "Faculty Mismatch", written only when a faculty mentor
       file is uploaded (same conditional pattern as Mentor ID). Placed after
@@ -490,7 +511,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.15</title>
+    <title>Navigate Caseload File Generator v3.9.16</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -662,7 +683,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.15 - Released September 22, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.16 - Released September 22, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -671,6 +692,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.16</span>
+                        <span style="font-size:12px; color:#6c757d;">September 22, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Program Director column fixed:</strong> It had been empty in every export because Navigate writes the role as "Program Director - Biology" (with a program suffix) and the app was looking for the bare tag. Now populated as <em>Name (Program)</em>, one entry per director. The "ESL Program Director" and "Honors Program Director" forms are intentionally not included.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1700,6 +1731,29 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     .join('; ') || null;
             },
 
+            // Program Directors carry a program suffix in Navigate - "(Program Director -
+            // Biology)" - so the exact-tag match in extractStaffByRole never fires for them.
+            // This matches the "Program Director - <program>" form only (the "ESL Program
+            // Director" / "Honors Program Director" prefix forms are deliberately excluded)
+            // and returns "Name (Program)" per director. The role text can itself contain
+            // parentheses, e.g. "Program Director - English (General Option)", so the role
+            // is taken as everything after the first "(" with one trailing ")" removed.
+            extractProgramDirectors(staffList) {
+                return staffList.split(';')
+                    .map(s => s.trim())
+                    .map(entry => {
+                        const open = entry.indexOf('(');
+                        if (open === -1) return null;
+                        const name = entry.slice(0, open).trim();
+                        const role = entry.slice(open + 1).replace(/\)\s*$/, '').trim();
+                        const m = role.match(/^Program Director\s*-\s*(.+)$/i);
+                        if (!m || !name) return null;
+                        return `${name} (${m[1].trim()})`;
+                    })
+                    .filter(Boolean)
+                    .join('; ') || null;
+            },
+
             extractProfessionalAdvisorAndOffice(staffList) {
                 const entries = staffList.split(';').map(s => s.trim());
                 
@@ -2178,7 +2232,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         record[CONSTANTS.COLUMNS.FACULTY_MENTOR] = [facultyMentor, clinicalAdvisor].filter(Boolean).join('; ') || null;
                         
                         record[CONSTANTS.COLUMNS.PEER_ADVISOR] = utils.extractStaffByRole(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '', 'peer advisor');
-                        record[CONSTANTS.COLUMNS.PROGRAM_DIRECTOR] = utils.extractStaffByRole(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '', 'program director');
+                        record[CONSTANTS.COLUMNS.PROGRAM_DIRECTOR] = utils.extractProgramDirectors(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '');
                         record[CONSTANTS.COLUMNS.LIBRARIAN] = utils.extractStaffByRole(record[CONSTANTS.COLUMNS.ASSIGNED_STAFF] || '', 'librarian');
                         
                         record[CONSTANTS.COLUMNS.ACADEMIC_STANDING] = utils.determineAcademicStanding(record[CONSTANTS.COLUMNS.CATEGORY] || '');
