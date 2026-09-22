@@ -1,12 +1,32 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.14
-  Released:     September 18, 2026
+  Version:      3.9.15
+  Released:     September 22, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.15  2026-09-22
+    - New export column "Faculty Mismatch", written only when a faculty mentor
+      file is uploaded (same conditional pattern as Mentor ID). Placed after
+      Faculty Academic Department_home.
+    - Values: Yes / No / Unknown. Yes when at least one mentor's Faculty Academic
+      Department_sub differs from the student's Student Academic Department_sub;
+      No when every mentor resolved and all match; Unknown when the student has
+      no sub-department, or a mentor is absent from the faculty file or has no
+      sub-department there. Students with no faculty mentor get no value.
+    - Uses the same rule as the dashboard's Faculty-Student Department Mismatch
+      Analysis (calculateFacultyStudentDepartmentMismatches), so the two agree.
+    - Computed in performLookups per mentor directly from the faculty lookup map,
+      NOT by re-splitting the exported "Faculty Academic Department_sub" column.
+      That column is de-duplicated with a Set and so is not positionally aligned
+      with Faculty Mentor; the dashboard function works around this with an
+      index fallback (facultyDepts[index] || facultyDepts[0]), which is correct
+      for one or two mentors but can misattribute with three or more. The export
+      column avoids the issue entirely.
+    - No dashboard changes.
+
   v3.9.14  2026-09-18
     - Advising Office entries within a row are now in a canonical alphabetical
       order. Navigate emits role tags in an arbitrary order, so the same pair of
@@ -470,7 +490,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.14</title>
+    <title>Navigate Caseload File Generator v3.9.15</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -642,7 +662,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.14 - Released September 18, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.15 - Released September 22, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -651,6 +671,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.15</span>
+                        <span style="font-size:12px; color:#6c757d;">September 22, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Faculty Mismatch column:</strong> When a faculty mentor file is uploaded, the export now includes a <em>Faculty Mismatch</em> column (Yes / No / Unknown) flagging students whose mentor's sub-department differs from their own. Same rule as the dashboard's mismatch analysis. Unknown means the mentor or the student's sub-department could not be resolved.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1184,6 +1214,7 @@ ROLES: {
                 SECONDARY_ADVISING_OFFICE: 'Secondary Advising Office',
                 SECONDARY_STAFF_ID: 'Secondary Staff ID',
                 FACULTY_MENTOR: 'Faculty Mentor',
+                FACULTY_MISMATCH: 'Faculty Mismatch',
                 PEER_ADVISOR: 'Peer Advisor',
                 PROGRAM_DIRECTOR: 'Program Director',
                 LIBRARIAN: 'Librarian',
@@ -2342,6 +2373,30 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         record[config.outputColumns.dept] = [...new Set(data.depts)].join('; ') || null;
                         record[config.outputColumns.deptSub] = [...new Set(data.deptSubs)].join('; ') || null;
                         record[config.outputColumns.deptHome] = [...new Set(data.deptHomes)].join('; ') || null;
+
+                        // Faculty Mismatch: same rule as the dashboard's Faculty-Student
+                        // Department Mismatch Analysis - any mentor whose sub-department
+                        // differs from the student's sub-department. Evaluated per mentor
+                        // straight from the lookup (NOT from the de-duplicated deptSub column
+                        // above, which is not positionally aligned with the mentor names).
+                        //   Yes     - at least one mentor's sub-dept differs from the student's
+                        //   No      - every mentor resolved and all match
+                        //   Unknown - student has no sub-dept, or a mentor is missing from the
+                        //             faculty file / has no sub-dept there
+                        const studentSub = (record[CONSTANTS.COLUMNS.STUDENT_DEPT_SUB] || '').trim();
+                        let mismatch = 'No';
+                        if (!studentSub) {
+                            mismatch = 'Unknown';
+                        } else {
+                            let anyMismatch = false, anyUnknown = false;
+                            names.forEach(name => {
+                                const sub = (map[name]?.deptSub || '').toString().trim();
+                                if (!sub) anyUnknown = true;
+                                else if (sub !== studentSub) anyMismatch = true;
+                            });
+                            mismatch = anyMismatch ? 'Yes' : (anyUnknown ? 'Unknown' : 'No');
+                        }
+                        record[CONSTANTS.COLUMNS.FACULTY_MISMATCH] = mismatch;
                     }
                     
                     else if (type === 'peer' && record[CONSTANTS.COLUMNS.PEER_ADVISOR]) {
@@ -4933,7 +4988,7 @@ function generatePeerDashboard(analytics, totalRecords) {
                     // Add lookup columns
                     if (appState.data.advisor) columnOrder.push('Staff ID');
                     if (appState.data.faculty) {
-                        columnOrder.push('Mentor ID', 'Faculty Academic Department', 'Faculty Academic Department_sub', 'Faculty Academic Department_home');
+                        columnOrder.push('Mentor ID', 'Faculty Academic Department', 'Faculty Academic Department_sub', 'Faculty Academic Department_home', 'Faculty Mismatch');
                     }
                     if (appState.data.peer) {
                         columnOrder.push('Peer ID', 'Peer Academic Department');
@@ -5164,6 +5219,7 @@ function exportProcessedData() {
         pushIfPresent(desiredOrder, 'Faculty Academic Department');
         pushIfPresent(desiredOrder, 'Faculty Academic Department_sub');
         pushIfPresent(desiredOrder, 'Faculty Academic Department_home');
+        pushIfPresent(desiredOrder, {const:'FACULTY_MISMATCH'});           // Faculty Mismatch (faculty file only)
         // Peer advisor and related
         pushIfPresent(desiredOrder, 'Peer Advisor');
         pushIfPresent(desiredOrder, 'Peer ID');                             // Peer ID (peer file)
