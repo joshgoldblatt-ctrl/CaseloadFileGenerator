@@ -1,12 +1,34 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.16
-  Released:     September 22, 2026
+  Version:      3.9.17
+  Released:     September 23, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.17  2026-09-23
+    - Semester picker no longer defaults to Spring 2026. Term buttons start
+      unselected and the year dropdown starts on a "select" placeholder; the badge
+      reads "Not selected" (grey) until both are chosen. getSelectedSemester()
+      returns null when either is unset, so the existing guard in processFiles
+      can now actually fire - previously a default was always present and the
+      guard was dead code. Added 2024 to the year list (range is now 2024-2030).
+      Reason: files are processed across term boundaries and a silent default
+      produced wrong Semester stamps and wrong clinical matches.
+    - Confirmation modal before processing. Process Files now shows an in-app
+      dialog with the semester in large type, the exact clinical Category entry
+      that will be matched, and a live count of students in the loaded raw file
+      who carry that entry (prescanClinical scans the raw Category column before
+      anything is written). If the count is zero the dialog turns red, explains
+      the likely cause (wrong term/year), and the button reads "Proceed anyway".
+      Cancel or clicking outside the dialog aborts with nothing changed.
+    - Structure: the old processFiles body moved unchanged into runProcessing(
+      semester); processFiles is now validate -> prescan -> confirm -> run.
+      The post-processing zero-match warning from v3.9.12 is retained as a second
+      line of defence.
+    - No changes to the export, dashboard, or Category Manager.
+
   v3.9.16  2026-09-22
     - BUG FIX: the Program Director column has been empty in every export.
       extractStaffByRole matched the literal tag "(program director)", but Navigate
@@ -511,7 +533,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.16</title>
+    <title>Navigate Caseload File Generator v3.9.17</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -683,7 +705,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.16 - Released September 22, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.17 - Released September 23, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -692,6 +714,17 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.17</span>
+                        <span style="font-size:12px; color:#6c757d;">September 23, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Semester must be chosen explicitly:</strong> The picker no longer defaults to Spring 2026. Pick a term and a year (2024–2030) or Process Files will not run.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Confirmation before processing:</strong> A dialog now shows the selected semester, the exact clinical Category entry that will be matched, and how many students in the loaded file carry it. A zero count is flagged in red so a wrong term is caught before anything is written.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1127,14 +1160,16 @@
                     <div style="font-size: 12px; color: #555; margin-bottom: 6px; font-weight: 600;">TERM</div>
                     <div style="display: flex; gap: 8px;">
                         <button id="termFall" onclick="selectTerm('Fall')" style="padding: 8px 20px; border-radius: 6px; border: 2px solid #c5d0f0; background: #fff; color: #555; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Fall</button>
-                        <button id="termSpring" onclick="selectTerm('Spring')" style="padding: 8px 20px; border-radius: 6px; border: 2px solid #2c3e7a; background: #2c3e7a; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Spring</button>
+                        <button id="termSpring" onclick="selectTerm('Spring')" style="padding: 8px 20px; border-radius: 6px; border: 2px solid #c5d0f0; background: #fff; color: #555; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Spring</button>
                     </div>
                 </div>
                 <div>
                     <div style="font-size: 12px; color: #555; margin-bottom: 6px; font-weight: 600;">YEAR</div>
                     <select id="semesterYear" onchange="updateSemesterDisplay()" style="padding: 8px 14px; border-radius: 6px; border: 2px solid #c5d0f0; font-size: 14px; font-weight: 600; color: #2c3e7a; background: #fff; cursor: pointer;">
+                        <option value="" selected>— select —</option>
+                        <option value="2024">2024</option>
                         <option value="2025">2025</option>
-                        <option value="2026" selected>2026</option>
+                        <option value="2026">2026</option>
                         <option value="2027">2027</option>
                         <option value="2028">2028</option>
                         <option value="2029">2029</option>
@@ -1142,7 +1177,7 @@
                     </select>
                 </div>
                 <div style="margin-top: 18px; padding: 8px 18px; background: #2c3e7a; color: #fff; border-radius: 6px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px;">
-                    <span id="semesterDisplay">Spring 2026</span>
+                    <span id="semesterDisplay">Not selected</span>
                 </div>
             </div>
         </div>
@@ -1303,7 +1338,10 @@ function toAdvisingOfficeFromRole(roleLabel) {
 
 
         // SEMESTER PICKER
-        let selectedTerm = 'Spring';
+        // No default. Josh processes files across term boundaries and a pre-set
+        // Spring silently produced wrong Semester stamps and wrong clinical matches.
+        // Both term and year must be chosen explicitly before Process Files will run.
+        let selectedTerm = null;
 
         function selectTerm(term) {
             selectedTerm = term;
@@ -1317,12 +1355,16 @@ function toAdvisingOfficeFromRole(roleLabel) {
         }
 
         function updateSemesterDisplay() {
-            const year = document.getElementById('semesterYear').value;
-            document.getElementById('semesterDisplay').textContent = selectedTerm + ' ' + year;
+            const sem = getSelectedSemester();
+            const el = document.getElementById('semesterDisplay');
+            el.textContent = sem || 'Not selected';
+            el.parentElement.style.background = sem ? '#2c3e7a' : '#b0b6c8';
         }
 
+        // Returns "Fall 2026" etc., or null if either term or year is unset.
         function getSelectedSemester() {
             const year = document.getElementById('semesterYear').value;
+            if (!selectedTerm || !year) return null;
             return selectedTerm + ' ' + year;
         }
 
@@ -2122,14 +2164,73 @@ function toAdvisingOfficeFromRole(roleLabel) {
         }
 
         // DATA PROCESSING
+        // Pre-scan the raw main file for the clinical Category entry so the
+        // confirmation can show a real count BEFORE anything is written.
+        function prescanClinical(clinicalEntry) {
+            const mainData = appState.data.main;
+            if (!clinicalEntry || !mainData || mainData.length < 3) return null;
+            const body = mainData.slice(2);
+            const headers = body[0].map(h => (h || '').toString().trim().toLowerCase());
+            const ci = headers.indexOf('category');
+            if (ci === -1) return null;
+            let n = 0;
+            for (let i = 1; i < body.length; i++) {
+                const cat = (body[i][ci] || '').toString();
+                if (cat.split(',').some(c => c.trim() === clinicalEntry)) n++;
+            }
+            return n;
+        }
+
+        function showProcessConfirm(semester, clinicalEntry, matchCount) {
+            const zero = matchCount === 0;
+            const unknown = matchCount === null;
+            const overlay = document.createElement('div');
+            overlay.id = 'processConfirmOverlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(20,24,40,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            overlay.innerHTML = `
+              <div style="background:#fff;border-radius:12px;max-width:560px;width:calc(100% - 32px);box-shadow:0 18px 50px rgba(0,0,0,0.35);overflow:hidden;font-family:inherit;">
+                <div style="background:#2c3e7a;color:#fff;padding:18px 24px;">
+                  <div style="font-size:12px;letter-spacing:0.6px;text-transform:uppercase;opacity:0.8;">Confirm before processing</div>
+                  <div style="font-size:30px;font-weight:800;margin-top:4px;">${semester}</div>
+                </div>
+                <div style="padding:20px 24px;font-size:14px;color:#333;line-height:1.55;">
+                  <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;">
+                    <div style="color:#6c757d;">Semester column</div><div><strong>${semester}</strong> on every row</div>
+                    <div style="color:#6c757d;">Clinical match</div><div><code style="background:#f1f3f5;padding:2px 6px;border-radius:4px;">${clinicalEntry || '(could not build entry)'}</code></div>
+                    <div style="color:#6c757d;">Matches in this file</div>
+                    <div>${unknown ? '<em>could not scan</em>' : `<strong style="font-size:18px;color:${zero ? '#b02a37' : '#1e7e34'};">${matchCount.toLocaleString()}</strong> student${matchCount === 1 ? '' : 's'}`}</div>
+                  </div>
+                  <div style="margin-top:14px;padding:10px 12px;background:#f8f9fa;border-left:4px solid #2c3e7a;border-radius:4px;font-size:13px;">
+                    Matching students get <strong>Health Sciences</strong> appended to Advising Office, with
+                    <strong>Health Sciences (no advisor)</strong> / <strong>N/A</strong> placeholders in Professional Advisor / Staff ID.
+                  </div>
+                  ${zero ? `<div style="margin-top:12px;padding:10px 12px;background:#fdecee;border:1px solid #f5c2c7;border-radius:6px;color:#721c24;font-size:13px;"><strong>No students match.</strong> If this file should contain clinical students, the wrong term or year is probably selected. Cancel and check the picker.</div>` : ''}
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;background:#f8f9fa;border-top:1px solid #e9ecef;">
+                  <button id="processConfirmCancel" style="padding:10px 18px;border-radius:6px;border:1px solid #c5d0f0;background:#fff;color:#2c3e7a;font-weight:600;cursor:pointer;">Cancel</button>
+                  <button id="processConfirmGo" style="padding:10px 22px;border-radius:6px;border:none;background:${zero ? '#b02a37' : '#2c3e7a'};color:#fff;font-weight:700;cursor:pointer;">${zero ? 'Proceed anyway' : 'Proceed'}</button>
+                </div>
+              </div>`;
+            document.body.appendChild(overlay);
+            const close = () => overlay.remove();
+            overlay.querySelector('#processConfirmCancel').onclick = close;
+            overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+            overlay.querySelector('#processConfirmGo').onclick = () => { close(); runProcessing(semester); };
+        }
+
         function processFiles() {
-            // Validate semester selection
             const semester = getSelectedSemester();
             if (!semester) {
-                utils.showStatus('Please select a semester before processing.', 'error');
+                utils.showStatus('Select both a term (Fall / Spring) and a year before processing.', 'error');
+                document.getElementById('semesterDisplay').parentElement.style.background = '#b02a37';
                 return;
             }
+            const clinicalEntry = clinicalCategoryEntry(semester);
+            const matchCount = prescanClinical(clinicalEntry);
+            showProcessConfirm(semester, clinicalEntry, matchCount);
+        }
 
+        function runProcessing(semester) {
             utils.showProgress(true);
             utils.updateProgress(0, 'Starting file processing...', 'Initializing data structures');
             
@@ -2298,7 +2399,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     }
                     
                     // Stamp semester onto every record
-                    const semesterValue = getSelectedSemester();
+                    const semesterValue = semester; // the value the confirmation dialog showed
                     records = records.map(record => {
                         record['Semester'] = semesterValue;
                         return record;
