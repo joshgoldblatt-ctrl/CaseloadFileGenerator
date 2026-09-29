@@ -1,12 +1,31 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.17
-  Released:     September 23, 2026
+  Version:      3.9.18
+  Released:     September 29, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.18  2026-09-29
+    - BUG FIX: restored the legacy role alias "cuny 2x tech academy advisor" to
+      ROLES.ADVISOR and ROLE_TO_OFFICE -> "CUNY 2X Tech Academy". Fall 2024 and
+      Spring 2025 raw exports tag CUNY 2X advisors with the older string
+      "(CUNY 2X Tech Academy Advisor)"; the list carried the even-older
+      "cuny 2x tech computer science advisor" and the current "academic advisor -
+      cuny 2x tech academy" but not this middle form, so those tags matched
+      nothing and the students received no CUNY 2X office. This alias existed in
+      an earlier lineage of the app and was lost. The other legacy tags (e.g.
+      "careers in engineering advisor") were never affected.
+    - Impact: FA24 148 students and SP25 117 students gain "CUNY 2X Tech Academy"
+      in Advising Office (all previously blank for that office). FA25 and SP26 use
+      the current tag format and are unchanged. No other office counts move.
+    - Observed but NOT changed: FA24 has 434 students tagged "(Education
+      Advisor)", the older spelling of "Education Faculty Advisor". That is a
+      department role, not an advising office, and is unmapped in every term, so
+      leaving it unmapped is consistent with current behavior.
+    - Nothing else changes.
+
   v3.9.17  2026-09-23
     - Semester picker no longer defaults to Spring 2026. Term buttons start
       unselected and the year dropdown starts on a "select" placeholder; the badge
@@ -533,7 +552,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.17</title>
+    <title>Navigate Caseload File Generator v3.9.18</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -705,7 +724,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.17 - Released September 23, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.18 - Released September 29, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -714,6 +733,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.18</span>
+                        <span style="font-size:12px; color:#6c757d;">September 29, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Legacy CUNY 2X tag restored:</strong> The older role string <em>CUNY 2X Tech Academy Advisor</em> (used in Fall 2024 and Spring 2025 exports) is recognized again and maps to the CUNY 2X Tech Academy office. This alias had been lost from an earlier version. Affects 148 FA24 and 117 SP25 students; later terms are unchanged.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1221,6 +1250,7 @@
     'careers in engineering advisor': 'Careers in Engineering',
     'academic advisor - careers in engineering': 'Careers in Engineering',
     'cuny 2x tech computer science advisor': 'CUNY 2X Tech Academy',
+    'cuny 2x tech academy advisor': 'CUNY 2X Tech Academy',
     'academic advisor - cuny 2x tech academy': 'CUNY 2X Tech Academy',
     'academic advisor - cybersecurity online program': 'CUNY 2X Tech Academy',
     'veteran services advisor': 'Veterans Services',
@@ -1243,7 +1273,7 @@ ROLES: {
                          'student advising services advisor', 'academic advisor - student advising services',
                          'international student services advisor', 'academic advisor - international student services',
                          'careers in engineering advisor', 'academic advisor - careers in engineering',
-                         'cuny 2x tech computer science advisor', 'academic advisor - cuny 2x tech academy',
+                         'cuny 2x tech computer science advisor', 'cuny 2x tech academy advisor', 'academic advisor - cuny 2x tech academy',
                          'academic advisor - cybersecurity online program',
                          'paramedic advisor', 'academic advisor - paramedic program',
                          'veteran services advisor', 'veterans services advisor', 'academic advisor - veterans services'],
