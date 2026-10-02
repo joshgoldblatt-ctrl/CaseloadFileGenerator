@@ -1,12 +1,46 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.18
-  Released:     September 29, 2026
+  Version:      3.9.20
+  Released:     October 2, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.20  2026-10-02
+    - Category Manager search box. Typing filters every category table (Featured
+      and all collapsible groups) on a case-insensitive substring; groups with no
+      matches are hidden and groups with matches auto-expand. "Select matching" /
+      "Clear matching" tick or untick only the currently visible rows, dispatching
+      the normal change event so selectedCategories and the group pills update.
+      Clearing the box restores all rows and re-collapses the groups.
+    - Implementation: rows carry data-cat (lower-cased name) and each group wrapper
+      carries data-catgroup; filterCategories() works purely on the DOM, so no
+      analytics are recomputed. Added alongside the existing bulk buttons; nothing
+      about selection state or export changed.
+    - Same feature ships in the new Navigate Caseload Generator Lite 1.0, forked
+      from this version, so the two Category Managers stay identical.
+
+  v3.9.19  2026-10-02
+    - "Student Type" renamed to "Admit Type" throughout: the export column header
+      (CONSTANTS.COLUMNS.STUDENT_TYPE now = 'Admit Type'), the dashboard tab and
+      heading, and the IR upload help text. Josh is updating the Advising Metrics
+      App / downstream consumers for the new header.
+    - IR file column detection now accepts any of "Admit Type", "Admission Type",
+      or "Student Type" (case-insensitive) via CONSTANTS.ADMIT_TYPE.INPUT_HEADERS.
+    - Buckets are now Freshmen / New Transfer / Continuing / Readmit. Values are
+      normalized by normalizeAdmitType() through an alias table, so older IR files
+      that say "New" / "Transfer" land in Freshmen / New Transfer rather than
+      appearing as extra rows. Unrecognized values pass through unchanged and
+      sort after the known buckets, as before. The four finalized metrics files
+      (FA24-SP26) use the old vocabulary and will re-process cleanly.
+    - Category Manager: no categories are selected by default. categoryStats
+      entries now initialize with selected:false. The Select All / Select Common /
+      Select Only Featured buttons and individual checkboxes are unchanged. A
+      fresh run therefore exports zero category Yes/No columns until some are
+      ticked - previously it exported all ~500.
+    - Nothing else changes.
+
   v3.9.18  2026-09-29
     - BUG FIX: restored the legacy role alias "cuny 2x tech academy advisor" to
       ROLES.ADVISOR and ROLE_TO_OFFICE -> "CUNY 2X Tech Academy". Fall 2024 and
@@ -552,7 +586,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.18</title>
+    <title>Navigate Caseload File Generator v3.9.20</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -724,7 +758,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.18 - Released September 29, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.20 - Released October 2, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -733,6 +767,27 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.20</span>
+                        <span style="font-size:12px; color:#6c757d;">October 2, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Category search:</strong> A search box in the Category Manager filters all categories as you type, expands the groups that match, and offers Select matching / Clear matching for the visible rows.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.19</span>
+                        <span style="font-size:12px; color:#6c757d;">October 2, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Student Type is now Admit Type:</strong> The export column, dashboard tab, and IR file help text are renamed. The IR file may use the header <em>Admit Type</em>, <em>Admission Type</em>, or <em>Student Type</em>. Buckets are Freshmen / New Transfer / Continuing / Readmit; older files using New / Transfer are translated automatically.</li>
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Category Manager starts empty:</strong> No categories are pre-selected. Use Select All, Select Common, Select Only Featured, or tick individually.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1173,7 +1228,8 @@
                 <div class="help-text">
                     <strong>Required columns:</strong><br>
                     • <code>Student ID</code> - Must match Student ID in main file<br>
-                    • <code>Student Type</code> - Values: New, Transfer, Continuing, or Readmit<br>
+                    • <code>Admit Type</code> (or <code>Admission Type</code> / <code>Student Type</code>) - Values: Freshmen, New Transfer, Continuing, or Readmit<br>
+                    &nbsp;&nbsp;Older files using New / Transfer are translated automatically<br>
                     <strong>Format:</strong> Student IDs must exactly match those in the main caseload file
                 </div>
                 <input type="file" id="irFile" accept=".csv">
@@ -1320,7 +1376,7 @@ ROLES: {
                 NAV_M: 'Navigate Major',
                 STUDENT_DEPT: 'Student Academic Department',
                 STUDENT_DEPT_SUB: 'Student Academic Department_sub',
-                STUDENT_TYPE: 'Student Type'
+                STUDENT_TYPE: 'Admit Type'
             },
             LOOKUP_CONFIGS: {
                 advisor: {
@@ -1366,6 +1422,27 @@ function toAdvisingOfficeFromRole(roleLabel) {
 }
 
 
+
+        // ADMIT TYPE (formerly Student Type)
+        // IR has used three header spellings and two value vocabularies over time.
+        // Everything normalizes to the four current buckets so any IR file, old or
+        // new, produces the same output and the same dashboard rows.
+        CONSTANTS.ADMIT_TYPE = {
+            INPUT_HEADERS: ['admit type', 'admission type', 'student type'],
+            BUCKETS: ['Freshmen', 'New Transfer', 'Continuing', 'Readmit'],
+            // lower-cased raw value -> canonical bucket
+            ALIASES: {
+                'freshmen': 'Freshmen', 'freshman': 'Freshmen', 'new': 'Freshmen', 'new freshman': 'Freshmen', 'first-year': 'Freshmen', 'first year': 'Freshmen',
+                'new transfer': 'New Transfer', 'transfer': 'New Transfer',
+                'continuing': 'Continuing',
+                'readmit': 'Readmit', 're-admit': 'Readmit', 'readmitted': 'Readmit'
+            }
+        };
+        function normalizeAdmitType(raw) {
+            const v = (raw ?? '').toString().trim();
+            if (!v) return '';
+            return CONSTANTS.ADMIT_TYPE.ALIASES[v.toLowerCase()] || v; // unknown values pass through untouched
+        }
 
         // SEMESTER PICKER
         // No default. Josh processes files across term boundaries and a pre-set
@@ -2402,7 +2479,8 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         if (irData && irData.length >= 2) {
                             const irHeaders = irData[0].map(h => h.trim());
                             const idIdx = irHeaders.findIndex(h => h.toLowerCase() === 'student id');
-                            const typeIdx = irHeaders.findIndex(h => h.toLowerCase() === 'student type');
+                            // Accept any of the three header spellings IR has used.
+                            const typeIdx = irHeaders.findIndex(h => CONSTANTS.ADMIT_TYPE.INPUT_HEADERS.includes(h.toLowerCase()));
                             
                             if (idIdx !== -1 && typeIdx !== -1) {
                                 // Build lookup map from IR file
@@ -2410,7 +2488,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                                 for (let i = 1; i < irData.length; i++) {
                                     const row = irData[i];
                                     const sid = row[idIdx]?.toString().trim();
-                                    const stype = row[typeIdx]?.toString().trim();
+                                    const stype = normalizeAdmitType(row[typeIdx]);
                                     if (sid) irMap[sid] = stype || 'Not Found';
                                 }
                                 
@@ -2420,7 +2498,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
                                     record[CONSTANTS.COLUMNS.STUDENT_TYPE] = sid && irMap[sid] ? irMap[sid] : 'Not Found';
                                 });
                             } else {
-                                console.warn('IR Student List missing required columns (Student ID, Student Type)');
+                                console.warn('IR Student List missing required columns (Student ID, and Admit Type / Admission Type / Student Type)');
                                 records.forEach(record => {
                                     record[CONSTANTS.COLUMNS.STUDENT_TYPE] = 'Not Found';
                                 });
@@ -3483,7 +3561,7 @@ analytics.advising = {
                     if (!categoryStats[cat]) {
                         categoryStats[cat] = {
                             count: 0,
-                            selected: true
+                            selected: false // nothing pre-selected; use the Featured/Common/All buttons or tick individually
                         };
                     }
                     categoryStats[cat].count++;
@@ -3584,8 +3662,8 @@ analytics.advising = {
         function calculateStudentTypeAnalytics(data) {
             const NON_DEGREE_VALUES = ['NA', 'Certificate <  30 Credits'];
             
-            const degreeStudents = { 'New': 0, 'Transfer': 0, 'Continuing': 0, 'Readmit': 0, 'Not Found': 0 };
-            const nonDegreeStudents = { 'New': 0, 'Transfer': 0, 'Continuing': 0, 'Readmit': 0, 'Not Found': 0 };
+            const degreeStudents = { 'Freshmen': 0, 'New Transfer': 0, 'Continuing': 0, 'Readmit': 0, 'Not Found': 0 };
+            const nonDegreeStudents = { 'Freshmen': 0, 'New Transfer': 0, 'Continuing': 0, 'Readmit': 0, 'Not Found': 0 };
             let totalDegree = 0;
             let totalNonDegree = 0;
             
@@ -3633,7 +3711,7 @@ analytics.advising = {
                             <button id="academicTab" class="tab-button" onclick="showTab('academic')" style="padding: 10px 20px; margin-right: 10px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Academic Departments</button>
                             ${appState.data.faculty ? '<button id="facultyTab" class="tab-button" onclick="showTab(\'faculty\')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Faculty Mentors</button>' : ''}
                             ${appState.data.peer ? '<button id="peerTab" class="tab-button" onclick="showTab(\'peer\')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Peer Advisors</button>' : ''}
-                            ${appState.data.ir ? '<button id="studentTypeTab" class="tab-button" onclick="showTab(\'studentType\')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Student Type</button>' : ''}
+                            ${appState.data.ir ? '<button id="studentTypeTab" class="tab-button" onclick="showTab(\'studentType\')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Admit Type</button>' : ''}
                             <button id="categoryTab" class="tab-button" onclick="showTab('category')" style="padding: 10px 20px; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #666;">Category Manager</button>
                         </div>
                         
@@ -4735,7 +4813,7 @@ function generatePeerDashboard(analytics, totalRecords) {
             
             const { degreeStudents, nonDegreeStudents, totalDegree, totalNonDegree, totalStudents } = analytics;
             
-            let html = '<h4 style="color: #333; margin-bottom: 15px;">📋 Student Type Dashboard</h4>';
+            let html = '<h4 style="color: #333; margin-bottom: 15px;">📋 Admit Type Dashboard</h4>';
             
             // Summary cards
             html += `
@@ -4761,13 +4839,13 @@ function generatePeerDashboard(analytics, totalRecords) {
                 let thtml = `<h5 style="color: ${colorScheme.heading}; margin: 20px 0 10px; padding: 10px; background-color: ${colorScheme.bg}; border-left: 4px solid ${colorScheme.heading};">${icon} ${title}</h5>`;
                 thtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">';
                 thtml += '<thead><tr style="background-color: #f8f9fa;">';
-                thtml += '<th style="border: 1px solid #dee2e6; padding: 10px; text-align: left;">Student Type</th>';
+                thtml += '<th style="border: 1px solid #dee2e6; padding: 10px; text-align: left;">Admit Type</th>';
                 thtml += '<th style="border: 1px solid #dee2e6; padding: 10px; text-align: right;">Count</th>';
                 thtml += '<th style="border: 1px solid #dee2e6; padding: 10px; text-align: right;">% of Group</th>';
                 thtml += '</tr></thead><tbody>';
                 
                 // Sort entries: known types first in order, then Not Found, then any others
-                const typeOrder = ['New', 'Transfer', 'Continuing', 'Readmit', 'Not Found'];
+                const typeOrder = ['Freshmen', 'New Transfer', 'Continuing', 'Readmit', 'Not Found'];
                 const sortedEntries = Object.entries(data).sort(([a], [b]) => {
                     const aIdx = typeOrder.indexOf(a);
                     const bIdx = typeOrder.indexOf(b);
@@ -4828,6 +4906,17 @@ function generatePeerDashboard(analytics, totalRecords) {
             html += '<button onclick="deselectAllCategories()" style="background-color: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Deselect All</button>';
             html += '<button onclick="selectOnlyFeatured()" style="background-color: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Select Only Featured</button>';
             html += '<button onclick="selectOnlyCommon()" style="background-color: #17a2b8; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Select Only Common (>5%)</button>';
+            html += '</div>';
+
+            // Search / filter bar. Filters every category table (featured + grouped)
+            // on a case-insensitive substring; groups with matches auto-expand.
+            html += '<div id="catSearchBar" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:18px; padding:12px 14px; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px;">';
+            html += '<span style="font-size:16px;">\uD83D\uDD0D</span>';
+            html += '<input id="catSearchInput" type="text" placeholder="Search categories\u2026" oninput="filterCategories(this.value)" style="flex:1; min-width:220px; padding:8px 12px; border:1px solid #ced4da; border-radius:4px; font-size:14px;">';
+            html += '<span id="catSearchCount" style="font-size:12px; color:#6c757d; min-width:120px;"></span>';
+            html += '<button onclick="selectMatchingCategories(true)" style="background-color:#28a745; color:#fff; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px;">Select matching</button>';
+            html += '<button onclick="selectMatchingCategories(false)" style="background-color:#6c757d; color:#fff; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px;">Clear matching</button>';
+            html += '<button onclick="clearCategorySearch()" style="background:none; border:1px solid #ced4da; color:#495057; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px;">\u2715</button>';
             html += '</div>';
             
             if (totalCategories > 0) {
@@ -4919,6 +5008,54 @@ function generatePeerDashboard(analytics, totalRecords) {
             arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
         };
 
+        // ---- Category search ----
+        // Hides non-matching rows across every category table, hides groups with no
+        // matches, and auto-expands groups that do match. Clearing the box restores
+        // all rows and re-collapses the groups.
+        window.filterCategories = function(query) {
+            const q = (query || '').trim().toLowerCase();
+            const rows = document.querySelectorAll('tr[data-cat]');
+            let shown = 0;
+            rows.forEach(tr => {
+                const hit = !q || tr.getAttribute('data-cat').includes(q);
+                tr.style.display = hit ? '' : 'none';
+                if (hit) shown++;
+            });
+            document.querySelectorAll('[data-catgroup]').forEach(wrap => {
+                const key = wrap.getAttribute('data-catgroup');
+                const body = document.getElementById('catGroupBody_' + key);
+                const arrow = document.getElementById('catGroupArrow_' + key);
+                const anyVisible = [...wrap.querySelectorAll('tr[data-cat]')].some(tr => tr.style.display !== 'none');
+                if (!q) {
+                    wrap.style.display = '';
+                    if (body) body.style.display = 'none';
+                    if (arrow) arrow.style.transform = '';
+                } else {
+                    wrap.style.display = anyVisible ? '' : 'none';
+                    if (body) body.style.display = anyVisible ? 'block' : 'none';
+                    if (arrow) arrow.style.transform = anyVisible ? 'rotate(180deg)' : '';
+                }
+            });
+            const c = document.getElementById('catSearchCount');
+            if (c) c.textContent = q ? `${shown} match${shown === 1 ? '' : 'es'}` : '';
+        };
+
+        window.selectMatchingCategories = function(on) {
+            const q = (document.getElementById('catSearchInput')?.value || '').trim().toLowerCase();
+            if (!q) return;
+            document.querySelectorAll('tr[data-cat]').forEach(tr => {
+                if (tr.style.display === 'none') return;
+                const cb = tr.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked !== on) { cb.checked = on; cb.dispatchEvent(new Event('change')); }
+            });
+        };
+
+        window.clearCategorySearch = function() {
+            const inp = document.getElementById('catSearchInput');
+            if (inp) inp.value = '';
+            filterCategories('');
+        };
+
         window.toggleCategoryGroup = function(key) {
             const body = document.getElementById('catGroupBody_' + key);
             const arrow = document.getElementById('catGroupArrow_' + key);
@@ -4934,7 +5071,7 @@ function generatePeerDashboard(analytics, totalRecords) {
 
             groups.forEach(group => {
                 const selectedInGroup = group.items.filter(([, stats]) => stats.selected).length;
-                html += '<div style="margin-bottom: 10px; border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden;">';
+                html += `<div data-catgroup="${group.key}" style="margin-bottom: 10px; border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden;">`;
                 html += `<button onclick="toggleCategoryGroup('${group.key}')" style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:10px 14px; background:#f8f9fa; border:none; cursor:pointer; font-size:14px; font-weight:600; color:#495057; text-align:left;">`;
                 html += `<span>${group.icon} ${group.label} <span style="font-weight:400; color:#6c757d;">(${group.items.length})</span>`;
                 html += ` <span id="catGroupPill_${group.key}" style="background:#d4edda; color:#155724; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; margin-left:6px; display:${selectedInGroup > 0 ? 'inline' : 'none'};">${selectedInGroup} selected</span>`;
@@ -4980,7 +5117,7 @@ function generatePeerDashboard(analytics, totalRecords) {
                 
                 const checkboxId = `category_${section}_${index}`;
                 
-                html += `<tr ${rowStyle}>`;
+                html += `<tr ${rowStyle} data-cat="${category.replace(/"/g, '&quot;').toLowerCase()}">`;
                 html += `<td style="border: 1px solid #dee2e6; padding: 8px; text-align: center;">`;
                 html += `<input type="checkbox" id="${checkboxId}" ${stats.selected ? 'checked' : ''} onchange="toggleCategory('${category.replace(/'/g, "\\'")}', this.checked)" style="transform: scale(1.2);">`;
                 html += `</td>`;
@@ -5385,7 +5522,7 @@ function exportProcessedData() {
         pushIfPresent(desiredOrder, 'Academic Standing');                  // Academic Standing
         pushIfPresent(desiredOrder, 'Graduation Status');                  // Graduation Status
         pushIfPresent(desiredOrder, 'Predicted Support Level');            // Predicted Support Level
-        pushIfPresent(desiredOrder, {const:'STUDENT_TYPE'});                // Student Type
+        pushIfPresent(desiredOrder, {const:'STUDENT_TYPE'});                // Admit Type (formerly Student Type)
         pushIfPresent(desiredOrder, {const:'ADVISING_OFFICE'});            // Advising Office
         pushIfPresent(desiredOrder, {const:'PROFESSIONAL_ADVISOR'});       // Professional Advisor
         pushIfPresent(desiredOrder, 'Staff ID');                           // Staff ID (advisor file)
