@@ -1,12 +1,26 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.20
+  Version:      3.9.21
   Released:     October 2, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.21  2026-10-02
+    - BUG FIX (introduced in v3.9.13): the Advising Office dashboard's "Multiple
+      Advisors (same office)" by-office sub-rows were wrong. When the "No
+      Professional Advisor" branch was added in v3.9.13, the multipleAdvisorsByOffice
+      increment was left inside that new branch instead of the multiple-advisors
+      branch above it. Result: every Health Sciences-only student was tallied
+      under multipleAdvisorsByOffice (showing e.g. "Health Sciences 515 - 3961.5%
+      of multi"), and the real multi-advisor offices (ASAP; ASAP, etc.) vanished
+      from the sub-rows. The three headline counts (Single Advisor / Multiple
+      Advisors / No Professional Advisor) were correct throughout; only the
+      per-office breakdown under Multiple Advisors was affected.
+    - Fix: moved the increment back into the multiple-advisors branch. No other
+      change. Same fix shipped in Lite 1.1.
+
   v3.9.20  2026-10-02
     - Category Manager search box. Typing filters every category table (Featured
       and all collapsible groups) on a case-insensitive substring; groups with no
@@ -172,6 +186,10 @@
       quality advisorsInCaseload set (excluded, so the placeholder never appears in
       "Primary Advisors in Caseload but NOT in Staff File"). The median caseload and
       advisor assignment tables derive from Assigned Staff roles and never see it.
+    - BUG (fixed in v3.9.21): the no-advisor branch added here accidentally
+      captured the multipleAdvisorsByOffice increment that belonged to the
+      multiple-advisors branch, so Health Sciences-only students were tallied in
+      the per-office rows under "Multiple Advisors (same office)".
     - Placeholder strings live in CONSTANTS.PLACEHOLDERS so a future rename is one
       edit; nothing else in the file hard-codes them.
 
@@ -586,7 +604,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.20</title>
+    <title>Navigate Caseload File Generator v3.9.21</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -758,7 +776,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.20 - Released October 2, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.21 - Released October 2, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -767,6 +785,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.21</span>
+                        <span style="font-size:12px; color:#6c757d;">October 2, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Dashboard fix:</strong> The per-office rows under "Multiple Advisors (same office)" were showing Health Sciences-only students (a v3.9.13 regression). They now show the actual multi-advisor offices again. Headline counts were unaffected.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -2744,18 +2772,21 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         } else if (advisorList.length > 1) {
                             singleOfficeBreakdown.multipleAdvisors++;
                             if (studentId) singleOfficeBreakdown.studentDetails[studentId] = 'multipleAdvisors';
+
+                            // Track which office the multiple-advisor case is in. This block
+                            // belongs to the MULTIPLE branch only - in v3.9.13-v3.9.20 it had
+                            // slipped into the no-advisor branch below, so every Health
+                            // Sciences-only student was counted under multipleAdvisorsByOffice.
+                            if (!singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey]) {
+                                singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey] = 0;
+                            }
+                            singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey]++;
                         } else {
                             // Office present, no advisor: a clinical student with no
                             // professional advisor. Previously this case was silently dropped
                             // from the breakdown, so the sub-rows did not sum to the total.
                             singleOfficeBreakdown.noAdvisor++;
                             if (studentId) singleOfficeBreakdown.studentDetails[studentId] = 'noAdvisor';
-                            
-                            // Track which office this is for
-                            if (!singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey]) {
-                                singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey] = 0;
-                            }
-                            singleOfficeBreakdown.multipleAdvisorsByOffice[officeKey]++;
                         }
                     }
                 } else {
