@@ -1,12 +1,27 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.21
-  Released:     October 2, 2026
+  Version:      3.9.22
+  Released:     October 5, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.22  2026-10-05
+    - BUG FIX: the IR Student List's ID column was only recognized when its
+      header was exactly "Student ID". The FA26 day-after-census file from IR
+      uses "EMPLID" (headers: STRM, ADMISSION TYPE, EMPLID, FIRST_NAME,
+      LAST_NAME, MAJOR), so the lookup never ran, every student was stamped
+      Admit Type "Not Found", and the only signal was a console warning, which
+      made it look like the admit-type values themselves were unrecognized.
+      * New CONSTANTS.ADMIT_TYPE.ID_HEADERS accepts Student ID, EMPLID,
+        Empl ID, Student_ID, StudentID, ID (case-insensitive).
+      * When either required column is missing, the app now shows a warning
+        in the status area naming which column it could not find and the
+        headers it did find, instead of logging to the console only.
+      * IR upload help text updated to list EMPLID.
+    - No change to admit-type normalization, buckets, or the output column.
+      Lite and the CUNY app have no IR upload and are unaffected.
   v3.9.21  2026-10-02
     - BUG FIX (introduced in v3.9.13): the Advising Office dashboard's "Multiple
       Advisors (same office)" by-office sub-rows were wrong. When the "No
@@ -604,7 +619,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.21</title>
+    <title>Navigate Caseload File Generator v3.9.22</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -776,7 +791,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.21 - Released October 2, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.22 - Released October 5, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -785,6 +800,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.22</span>
+                        <span style="font-size:12px; color:#6c757d;">October 5, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>IR file fix:</strong> The IR Student List's ID column is now recognized as <code>Student ID</code> or <code>EMPLID</code>. Previously an EMPLID header silently left every student at Admit Type "Not Found". If a required column is missing, a warning now appears in the status area naming the headers found.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1255,7 +1280,7 @@
                 </label>
                 <div class="help-text">
                     <strong>Required columns:</strong><br>
-                    • <code>Student ID</code> - Must match Student ID in main file<br>
+                    • <code>Student ID</code> or <code>EMPLID</code> - Must match Student ID in main file<br>
                     • <code>Admit Type</code> (or <code>Admission Type</code> / <code>Student Type</code>) - Values: Freshmen, New Transfer, Continuing, or Readmit<br>
                     &nbsp;&nbsp;Older files using New / Transfer are translated automatically<br>
                     <strong>Format:</strong> Student IDs must exactly match those in the main caseload file
@@ -1457,6 +1482,8 @@ function toAdvisingOfficeFromRole(roleLabel) {
         // new, produces the same output and the same dashboard rows.
         CONSTANTS.ADMIT_TYPE = {
             INPUT_HEADERS: ['admit type', 'admission type', 'student type'],
+            // v3.9.22: IR exports identify students as EMPLID; accept the common spellings.
+            ID_HEADERS: ['student id', 'emplid', 'empl id', 'student_id', 'studentid', 'id'],
             BUCKETS: ['Freshmen', 'New Transfer', 'Continuing', 'Readmit'],
             // lower-cased raw value -> canonical bucket
             ALIASES: {
@@ -2506,7 +2533,8 @@ function toAdvisingOfficeFromRole(roleLabel) {
                         const irData = appState.data.ir;
                         if (irData && irData.length >= 2) {
                             const irHeaders = irData[0].map(h => h.trim());
-                            const idIdx = irHeaders.findIndex(h => h.toLowerCase() === 'student id');
+                            // v3.9.22: accept EMPLID etc., not just "Student ID"
+                            const idIdx = irHeaders.findIndex(h => CONSTANTS.ADMIT_TYPE.ID_HEADERS.includes(h.toLowerCase()));
                             // Accept any of the three header spellings IR has used.
                             const typeIdx = irHeaders.findIndex(h => CONSTANTS.ADMIT_TYPE.INPUT_HEADERS.includes(h.toLowerCase()));
                             
@@ -2526,7 +2554,14 @@ function toAdvisingOfficeFromRole(roleLabel) {
                                     record[CONSTANTS.COLUMNS.STUDENT_TYPE] = sid && irMap[sid] ? irMap[sid] : 'Not Found';
                                 });
                             } else {
-                                console.warn('IR Student List missing required columns (Student ID, and Admit Type / Admission Type / Student Type)');
+                                // v3.9.22: surface this in the UI; a console-only warning let an
+                                // unrecognized ID column (EMPLID) look like unrecognized admit types.
+                                const missing = [];
+                                if (idIdx === -1) missing.push('a Student ID column (accepted: Student ID, EMPLID)');
+                                if (typeIdx === -1) missing.push('an Admit Type column (accepted: Admit Type, Admission Type, Student Type)');
+                                const msg = `IR Student List not applied: could not find ${missing.join(' or ')}. Headers found: ${irHeaders.join(', ')}. All students set to Admit Type "Not Found".`;
+                                console.warn(msg);
+                                utils.showStatus(msg, 'warning');
                                 records.forEach(record => {
                                     record[CONSTANTS.COLUMNS.STUDENT_TYPE] = 'Not Found';
                                 });
