@@ -1,12 +1,27 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      3.9.22
-  Released:     October 5, 2026
+  Version:      3.9.23
+  Released:     October 19, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v3.9.23  2026-10-19
+    - Main file header row is now located rather than assumed. The parser
+      previously always skipped the first two rows (Navigate's title/blank
+      rows) and read row 3 as the headers, so an export whose headers sit on
+      the very first row failed with "Missing required columns". The app now
+      scans the first 10 rows for the row containing Student ID, Assigned
+      Staff, and Category/Categories and treats that as the header row.
+      * New findMainHeaderRowIndex() helper, shared by processFiles() and the
+        clinical pre-scan so both agree on where the data starts.
+      * "Categories" is now accepted as an alias for the Category column, and
+        the required-column check runs against the normalized header names.
+      * If no header row is found in the first 10 rows, the error names the
+        three columns it was looking for instead of a generic failure.
+      * Main-file upload help text notes the header row may be on row 1.
+    - No change to record processing, mappings, dashboards, or output columns.
   v3.9.22  2026-10-05
     - BUG FIX: the IR Student List's ID column was only recognized when its
       header was exactly "Student ID". The FA26 day-after-census file from IR
@@ -619,7 +634,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v3.9.22</title>
+    <title>Navigate Caseload File Generator v3.9.23</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <style>
@@ -791,7 +806,7 @@
     <div class="container">
         <h1>📚 Navigate Caseload File Generator</h1>
         <p style="margin-top: -20px; margin-bottom: 5px; color: #666; font-style: italic;">Developed by Josh Goldblatt using Claude</p>
-        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.22 - Released October 5, 2026</div>
+        <div class="subtitle" style="margin-bottom: 16px;">Version 3.9.23 - Released October 19, 2026</div>
 
         <!-- Changelog Section -->
         <div style="margin-bottom: 24px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
@@ -800,6 +815,16 @@
                 <span id="changelogArrow" style="font-size:12px; color:#6c757d; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" style="display:none; padding:0 18px 16px; background:#fff; max-height:420px; overflow-y:auto;">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:#007bff;">v3.9.23</span>
+                        <span style="font-size:12px; color:#6c757d;">October 19, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:#495057; line-height:1.6;"><strong>Header row detection:</strong> The main file no longer has to start with two title rows. The app now finds the row containing <code>Student ID</code>, <code>Assigned Staff</code>, and <code>Category</code> (or <code>Categories</code>) within the first 10 rows and reads from there, so exports with the headers on row 1 work too.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid #f0f0f0;">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -1208,7 +1233,7 @@
             <div class="file-input-wrapper">
                 <label for="mainFile">Main CSV File (Enrollment and Caseload Report): <span style="color: #dc3545; font-weight: bold;">*REQUIRED</span></label>
                 <div class="help-text">
-                    <strong>Must contain:</strong> Student ID, Assigned Staff, Category columns<br>
+                    <strong>Must contain:</strong> Student ID, Assigned Staff, Category columns (header row may be on row 1 or after a few title rows)<br>
                     <strong>Format:</strong> CSV file exported from your enrollment system
                 </div>
                 <input type="file" id="mainFile" accept=".csv">
@@ -2326,14 +2351,35 @@ function toAdvisingOfficeFromRole(roleLabel) {
         }
 
         // DATA PROCESSING
+        // v3.9.23: locate the main file's header row instead of assuming it is
+        // row 3. Navigate exports sometimes carry two title/blank rows above the
+        // headers and sometimes start with the headers on row 1. Scan the first
+        // few rows for the one containing Student ID, Assigned Staff, and
+        // Category/Categories. Returns the row index, or -1 if none is found.
+        function findMainHeaderRowIndex(mainData, maxScan = 10) {
+            if (!Array.isArray(mainData)) return -1;
+            const limit = Math.min(mainData.length, maxScan);
+            for (let i = 0; i < limit; i++) {
+                const row = mainData[i];
+                if (!Array.isArray(row)) continue;
+                const cells = row.map(c => (c ?? '').toString().trim().toLowerCase());
+                const has = (name) => cells.some(c => c.includes(name));
+                if (has('student id') && has('assigned staff') && has('categor')) return i;
+            }
+            return -1;
+        }
+
         // Pre-scan the raw main file for the clinical Category entry so the
         // confirmation can show a real count BEFORE anything is written.
         function prescanClinical(clinicalEntry) {
             const mainData = appState.data.main;
-            if (!clinicalEntry || !mainData || mainData.length < 3) return null;
-            const body = mainData.slice(2);
+            if (!clinicalEntry || !mainData) return null;
+            const hi = findMainHeaderRowIndex(mainData);
+            if (hi === -1 || mainData.length < hi + 2) return null;
+            const body = mainData.slice(hi);
             const headers = body[0].map(h => (h || '').toString().trim().toLowerCase());
-            const ci = headers.indexOf('category');
+            let ci = headers.indexOf('category');
+            if (ci === -1) ci = headers.indexOf('categories');
             if (ci === -1) return null;
             let n = 0;
             for (let i = 1; i < body.length; i++) {
@@ -2402,18 +2448,25 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     utils.updateProgress(10, 'Validating main data file...', 'Checking file structure and required columns');
                     
                     const mainData = appState.data.main;
-                    if (!mainData || mainData.length < 3) {
+                    if (!mainData || mainData.length < 2) {
                         throw new Error('Main data appears to be too short or missing');
                     }
-                    
-                    let data = mainData.slice(2);
-                    const headers = data[0].map(h => h.trim());
+
+                    // v3.9.23: find the header row (row 1, row 3, or anywhere in the first 10 rows)
+                    const headerRowIndex = findMainHeaderRowIndex(mainData);
+                    if (headerRowIndex === -1) {
+                        throw new Error('Could not find a header row containing Student ID, Assigned Staff, and Category within the first 10 rows of the main file');
+                    }
+
+                    let data = mainData.slice(headerRowIndex);
+                    const headers = data[0].map(h => (h ?? '').toString().trim());
 
                     // Normalize headers and apply canonical names (e.g., rename raw 'Major' -> 'Navigate Major')
                     const aliasMap = new Map([
                         ['student id', CONSTANTS.COLUMNS.STUDENT_ID],
                         ['assigned staff', CONSTANTS.COLUMNS.ASSIGNED_STAFF],
                         ['category', CONSTANTS.COLUMNS.CATEGORY],
+                        ['categories', CONSTANTS.COLUMNS.CATEGORY],
                         ['major', CONSTANTS.COLUMNS.NAV_M],
                         ['navigate major', CONSTANTS.COLUMNS.NAV_M],
                         ['nav_m', CONSTANTS.COLUMNS.NAV_M],
@@ -2432,8 +2485,9 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     data = data.slice(1);
                     
                     const requiredColumns = [CONSTANTS.COLUMNS.STUDENT_ID, CONSTANTS.COLUMNS.ASSIGNED_STAFF, CONSTANTS.COLUMNS.CATEGORY];
-                    const missingColumns = requiredColumns.filter(reqCol => 
-                        !headers.find(header => header.toLowerCase().includes(reqCol.toLowerCase()))
+                    // v3.9.23: check the normalized names so 'Categories' (aliased to 'Category') passes
+                    const missingColumns = requiredColumns.filter(reqCol =>
+                        !normalizedHeaders.find(header => header.toLowerCase().includes(reqCol.toLowerCase()))
                     );
                     
                     if (missingColumns.length > 0) {
