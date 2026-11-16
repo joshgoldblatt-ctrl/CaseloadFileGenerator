@@ -1,12 +1,35 @@
 <!--
 ================================================================================
   App:          LaGuardia Navigate Caseload Generator
-  Version:      4.0
-  Released:     October 28, 2026
+  Version:      4.2
+  Released:     November 16, 2026
   Developed by: Josh Goldblatt using Claude
 ================================================================================
   CHANGELOG (most recent first)
 --------------------------------------------------------------------------------
+  v4.2  2026-11-16
+    - NEW: "Download IR + Advised CSV" button in the Export panel. Exports the
+      same columns as Download CSV but only students who are on the IR
+      Student List OR have at least one named Professional Advisor (the
+      "Health Sciences (no advisor)" placeholder does not count). IR
+      membership is tracked as appState.irStudentIds (a Set of IDs from the
+      IR file, independent of the Admit Type value) and appState.irApplied;
+      both are reset at the start of runProcessing(). The button is disabled
+      with a note when no IR list was joined. The panel shows how many
+      students qualify; the file is named Caseload File_IR+Advised_MM.DD.YYYY.csv.
+      exportProcessedData(mode) now takes 'irAdvised'; helpers isIrOrAdvised()
+      and countIrAdvised(). Download CSV is unchanged.
+  v4.1  2026-11-16
+    - NEW: File Date column. The "Confirm before processing" dialog that opens
+      on Process Files now has a date field (defaults to today's local date;
+      editable; required - Proceed is blocked until a date is set). The value
+      is stamped on every record as "File Date" in YYYY-MM-DD and exported
+      right after "Semester". runProcessing(semester, fileDate); the value is
+      also kept in appState.fileDate. New helper localDateISO() builds the
+      local calendar date (toISOString() would shift to UTC after 7pm ET).
+    - Lite and CUNY generators unchanged. Downstream apps (Advising Metrics,
+      Engagement Metrics) ignore unknown caseload columns, so the extra
+      column is harmless; it is not yet surfaced in either Tableau workbook.
   v4.0  2026-10-28
     - DESIGN MIGRATION onto the LaGuardia standard design system (the same look
       as the Advising Metrics App 8.13 and the CUNY apps). Visual layer only:
@@ -674,7 +697,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigate Caseload File Generator v4.0</title>
+    <title>Navigate Caseload File Generator v4.2</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
 </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -841,8 +864,8 @@ th{font-weight:700;color:var(--ink-soft)}
                     <p class="subtitle">Turns a Navigate enrollment export into an enriched caseload file: advising offices, professional advisors, staff IDs, faculty mentors, academic departments, and the categories you choose, with a dashboard for QA.</p>
                 </div>
                 <div class="meta-box">
-                    <b>Version:</b><span>4.0</span>
-                    <b>Released:</b><span>October 28, 2026</span>
+                    <b>Version:</b><span>4.2</span>
+                    <b>Released:</b><span>November 16, 2026</span>
                     <b>Developed by:</b><span>Josh Goldblatt using Claude</span>
                 </div>
             </div>
@@ -855,6 +878,26 @@ th{font-weight:700;color:var(--ink-soft)}
                 <span id="changelogArrow" style="font-size:12px; transition:transform 0.25s ease;">▼</span>
             </button>
             <div id="changelogBody" class="clog-body">
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid var(--line);">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:var(--accent);">v4.2</span>
+                        <span style="font-size:12px; color:var(--ink-faint);">November 16, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:var(--ink-soft); line-height:1.6;"><strong>IR + Advised export:</strong> a second button in the Export panel downloads only students who are on the IR Student List or have a named Professional Advisor (Health Sciences placeholder excluded). Same columns as the main export; disabled until an IR list has been processed.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid var(--line);">
+                    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:14px; color:var(--accent);">v4.1</span>
+                        <span style="font-size:12px; color:var(--ink-faint);">November 16, 2026</span>
+                    </div>
+                    <ul style="margin:4px 0 0 0; padding-left:20px;">
+                        <li style="font-size:13px; color:var(--ink-soft); line-height:1.6;"><strong>File Date column:</strong> the confirmation dialog on Process Files now asks for the date the export was pulled (defaults to today, required). It is written to every row as <strong>File Date</strong> (YYYY-MM-DD), placed right after Semester in the CSV.</li>
+                    </ul>
+                </div>
 
                 <div style="margin-top:16px; padding-bottom:14px; border-bottom:1px solid var(--line);">
                     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
@@ -2447,6 +2490,7 @@ function toAdvisingOfficeFromRole(roleLabel) {
         function showProcessConfirm(semester, clinicalEntry, matchCount) {
             const zero = matchCount === 0;
             const unknown = matchCount === null;
+            const todayISO = localDateISO(new Date());
             const overlay = document.createElement('div');
             overlay.id = 'processConfirmOverlay';
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(20,24,40,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
@@ -2463,6 +2507,12 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     <div style="color:var(--ink-soft);">Matches in this file</div>
                     <div>${unknown ? '<em>could not scan</em>' : `<strong style="font-size:18px;color:${zero ? 'var(--accent)' : 'var(--green)'};">${matchCount.toLocaleString()}</strong> student${matchCount === 1 ? '' : 's'}`}</div>
                   </div>
+                  <div style="margin-top:16px;padding:12px 14px;background:var(--paper);border:1px solid var(--line);border-radius:8px;">
+                    <label for="fileDateInput" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);margin-bottom:4px;">File date (date this export was pulled)</label>
+                    <input id="fileDateInput" type="date" value="${todayISO}" style="font-family:var(--font-body);font-size:14px;padding:8px 11px;border:1.5px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);">
+                    <div style="font-size:12px;color:var(--ink-faint);margin-top:4px;">Written to every row as <strong>File Date</strong> (YYYY-MM-DD). Defaults to today; change it if the file was run on another day.</div>
+                    <div id="fileDateError" style="display:none;font-size:12px;color:var(--accent);margin-top:4px;font-weight:600;">Enter a date before proceeding.</div>
+                  </div>
                   <div style="margin-top:14px;padding:10px 12px;background:var(--paper);border-left:4px solid var(--ink);border-radius:4px;font-size:13px;">
                     Matching students get <strong>Health Sciences</strong> appended to Advising Office, with
                     <strong>Health Sciences (no advisor)</strong> / <strong>N/A</strong> placeholders in Professional Advisor / Staff ID.
@@ -2478,7 +2528,22 @@ function toAdvisingOfficeFromRole(roleLabel) {
             const close = () => overlay.remove();
             overlay.querySelector('#processConfirmCancel').onclick = close;
             overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-            overlay.querySelector('#processConfirmGo').onclick = () => { close(); runProcessing(semester); };
+            overlay.querySelector('#processConfirmGo').onclick = () => {
+                const fileDate = (overlay.querySelector('#fileDateInput').value || '').trim();
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(fileDate)) {
+                    overlay.querySelector('#fileDateError').style.display = 'block';
+                    overlay.querySelector('#fileDateInput').focus();
+                    return;
+                }
+                close();
+                runProcessing(semester, fileDate);
+            };
+        }
+
+        // v4.1: local calendar date as YYYY-MM-DD (avoids the UTC shift of toISOString())
+        function localDateISO(d) {
+            const p = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
         }
 
         function processFiles() {
@@ -2493,7 +2558,9 @@ function toAdvisingOfficeFromRole(roleLabel) {
             showProcessConfirm(semester, clinicalEntry, matchCount);
         }
 
-        function runProcessing(semester) {
+        function runProcessing(semester, fileDate) {
+            appState.irApplied = false;        // v4.2: set true only when the IR list is actually joined
+            appState.irStudentIds = new Set();
             utils.showProgress(true);
             utils.updateProgress(0, 'Starting file processing...', 'Initializing data structures');
             
@@ -2656,6 +2723,9 @@ function toAdvisingOfficeFromRole(roleLabel) {
                                     const stype = normalizeAdmitType(row[typeIdx]);
                                     if (sid) irMap[sid] = stype || 'Not Found';
                                 }
+                                // v4.2: remember who is on the IR list (membership, independent of admit type value)
+                                appState.irStudentIds = new Set(Object.keys(irMap));
+                                appState.irApplied = true;
                                 
                                 // Match to records
                                 records.forEach(record => {
@@ -2680,10 +2750,13 @@ function toAdvisingOfficeFromRole(roleLabel) {
                     
                     // Stamp semester onto every record
                     const semesterValue = semester; // the value the confirmation dialog showed
+                    const fileDateValue = fileDate || localDateISO(new Date()); // v4.1
                     records = records.map(record => {
                         record['Semester'] = semesterValue;
+                        record['File Date'] = fileDateValue;
                         return record;
                     });
+                    appState.fileDate = fileDateValue;
 
                     appState.processedData = records;
                     
@@ -3925,6 +3998,12 @@ analytics.advising = {
                         <div class="panel">
                             <p class="note" style="margin:0 0 12px">Download the processed CSV with the relationship and category columns selected above.</p>
                             <button id="copyBtn" class="btn-lg" onclick="exportProcessedData()">Download CSV</button>
+                            <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">
+                                <p class="note" style="margin:0 0 10px">${appState.irApplied
+                                    ? `IR + Advised: every student on the IR Student List, plus any student with a named Professional Advisor (the Health Sciences placeholder does not count). Same columns as above. <strong>${countIrAdvised().toLocaleString()}</strong> of ${data.length.toLocaleString()} students qualify.`
+                                    : 'IR + Advised export needs the IR Student List. Upload it and process again to enable this button.'}</p>
+                                <button id="irAdvisedBtn" class="btn-lg secondary" onclick="exportProcessedData('irAdvised')" ${appState.irApplied ? '' : 'disabled'}>Download IR + Advised CSV</button>
+                            </div>
 
 <div class="progress-container" id="copyProgressContainer" style="margin-top: 15px; padding: 15px; background-color: var(--paper); border: 1px solid var(--line); border-radius: 4px; display: none;">
     <div class="progress-text" id="copyProgressText">Preparing CSV data...</div>
@@ -5619,7 +5698,22 @@ function generatePeerDashboard(analytics, totalRecords) {
 
 
 
-function exportProcessedData() {
+// v4.2: a student qualifies for the "IR + Advised" export when they are on the IR
+// Student List OR have at least one named Professional Advisor. The Health
+// Sciences placeholder is not an advisor.
+function isIrOrAdvised(record) {
+    const sid = (record[CONSTANTS.COLUMNS.STUDENT_ID] ?? '').toString().trim();
+    if (sid && appState.irStudentIds && appState.irStudentIds.has(sid)) return true;
+    const advisors = String(record[CONSTANTS.COLUMNS.PROFESSIONAL_ADVISOR] || '')
+        .split(';').map(a => a.trim())
+        .filter(a => a && a !== CONSTANTS.PLACEHOLDERS.ADVISOR);
+    return advisors.length > 0;
+}
+function countIrAdvised() {
+    return (appState.processedData || []).filter(isIrOrAdvised).length;
+}
+
+function exportProcessedData(mode) {
     try {
         if (!appState || !Array.isArray(appState.processedData) || appState.processedData.length === 0) {
             const msg = 'No data available to export yet. Generate the file first.';
@@ -5627,7 +5721,12 @@ function exportProcessedData() {
             return;
         }
 
-        const rows = appState.processedData;
+        const irAdvised = mode === 'irAdvised';
+        if (irAdvised && !appState.irApplied) {
+            utils.showStatus('IR + Advised export needs the IR Student List. Upload it and process again.', 'warning');
+            return;
+        }
+        const rows = irAdvised ? appState.processedData.filter(isIrOrAdvised) : appState.processedData;
         
         // Collect ALL headers from ALL records, not just the first one
         const allHeaders = new Set();
@@ -5673,6 +5772,7 @@ function exportProcessedData() {
         // Desired column order (prebuilt), conditionally included if present
         const desiredOrder = [];
         pushIfPresent(desiredOrder, 'Semester');                           // Semester (selected at processing time)
+        pushIfPresent(desiredOrder, 'File Date');                          // File Date (entered in the confirm dialog, v4.1)
         pushIfPresent(desiredOrder, {const:'STUDENT_ID'});                 // Student ID
         pushIfPresent(desiredOrder, 'Name');                               // Name
         pushIfPresent(desiredOrder, 'Student List');                       // Student List
@@ -5742,7 +5842,7 @@ function exportProcessedData() {
         const yyyy = today.getFullYear();
         const mm = String(today.getMonth() + 1).padStart(2, '0');
         const dd = String(today.getDate()).padStart(2, '0');
-        const filename = `Caseload File_${mm}.${dd}.${yyyy}.csv`;
+        const filename = irAdvised ? `Caseload File_IR+Advised_${mm}.${dd}.${yyyy}.csv` : `Caseload File_${mm}.${dd}.${yyyy}.csv`;
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -5755,7 +5855,9 @@ function exportProcessedData() {
         URL.revokeObjectURL(url);
 
         if (window.utils && typeof window.utils.showStatus === 'function') {
-            utils.showStatus(`CSV exported: ${filename}`, 'success');
+            utils.showStatus(irAdvised
+                ? `CSV exported: ${filename} (${rows.length.toLocaleString()} of ${appState.processedData.length.toLocaleString()} students: on the IR list or with a named Professional Advisor)`
+                : `CSV exported: ${filename}`, 'success');
         }
     } catch (err) {
         console.error(err);
